@@ -293,7 +293,7 @@ export const AuthKanbanApp = () => {
   }
 
   return (
-    <div className="relative xl:pr-[380px]">
+    <div className="relative">
       <div className="pointer-events-none absolute left-0 top-0 z-20 h-24 w-full bg-gradient-to-b from-[var(--surface)] to-transparent" />
       {isSavingBoard ? (
         <div className="absolute left-6 top-6 z-30 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--gray-text)] shadow-[var(--shadow)]">
@@ -312,54 +312,58 @@ export const AuthKanbanApp = () => {
       >
         Log out
       </button>
-      <aside className="fixed right-6 top-20 z-30 flex h-[calc(100vh-7rem)] w-[340px] flex-col rounded-3xl border border-[var(--stroke)] bg-white p-4 shadow-[var(--shadow)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-          AI Chat
-        </p>
-        <h2 className="mt-2 font-display text-xl font-semibold text-[var(--navy-dark)]">
-          Board Assistant
-        </h2>
-        <div className="mt-4 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3">
-          {chatMessages.length === 0 ? (
-            <p className="text-sm text-[var(--gray-text)]">Ask for planning help or board updates.</p>
-          ) : null}
-          {chatMessages.map((chatMessage, index) => (
-            <div
-              key={`${chatMessage.role}-${index}`}
-              className="rounded-xl border border-[var(--stroke)] bg-white px-3 py-2"
-            >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
-                {chatMessage.role}
-              </p>
-              <p className="mt-1 text-sm text-[var(--navy-dark)]">{chatMessage.content}</p>
-            </div>
-          ))}
+      <div className="flex flex-col gap-6 pt-20 xl:flex-row xl:items-start">
+        <div className="min-w-0 flex-1">
+          {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
         </div>
+        <aside className="mx-6 mb-6 flex max-h-[70vh] flex-col rounded-3xl border border-[var(--stroke)] bg-white p-4 shadow-[var(--shadow)] xl:sticky xl:top-6 xl:mx-0 xl:mr-6 xl:mt-6 xl:max-h-[calc(100vh-3rem)] xl:w-[340px] xl:flex-none">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+            AI Chat
+          </p>
+          <h2 className="mt-2 font-display text-xl font-semibold text-[var(--navy-dark)]">
+            Board Assistant
+          </h2>
+          <div className="mt-4 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3">
+            {chatMessages.length === 0 ? (
+              <p className="text-sm text-[var(--gray-text)]">Ask for planning help or board updates.</p>
+            ) : null}
+            {chatMessages.map((chatMessage, index) => (
+              <div
+                key={`${chatMessage.role}-${index}`}
+                className="rounded-xl border border-[var(--stroke)] bg-white px-3 py-2"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+                  {chatMessage.role}
+                </p>
+                <p className="mt-1 text-sm text-[var(--navy-dark)]">{chatMessage.content}</p>
+              </div>
+            ))}
+          </div>
 
-        <form className="mt-3 space-y-2" onSubmit={handleChatSubmit}>
-          <label htmlFor="ai-chat-input" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
-            Message
-          </label>
-          <textarea
-            id="ai-chat-input"
-            value={chatInput}
-            onChange={(event) => setChatInput(event.target.value)}
-            placeholder="Ask AI to update cards or give guidance"
-            className="h-24 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
-          />
-          {chatErrorMessage ? (
-            <p className="text-xs font-semibold text-[var(--secondary-purple)]">{chatErrorMessage}</p>
-          ) : null}
-          <button
-            type="submit"
-            className="w-full rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:brightness-110 disabled:opacity-70"
-            disabled={isSendingChat}
-          >
-            {isSendingChat ? "Sending..." : "Send"}
-          </button>
-        </form>
-      </aside>
-      {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
+          <form className="mt-3 space-y-2" onSubmit={handleChatSubmit}>
+            <label htmlFor="ai-chat-input" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+              Message
+            </label>
+            <textarea
+              id="ai-chat-input"
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Ask AI to update cards or give guidance"
+              className="h-24 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+            />
+            {chatErrorMessage ? (
+              <p className="text-xs font-semibold text-[var(--secondary-purple)]">{chatErrorMessage}</p>
+            ) : null}
+            <button
+              type="submit"
+              className="w-full rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:brightness-110 disabled:opacity-70"
+              disabled={isSendingChat}
+            >
+              {isSendingChat ? "Sending..." : "Send"}
+            </button>
+          </form>
+        </aside>
+      </div>
     </div>
   );
 };
