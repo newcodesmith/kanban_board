@@ -1,4 +1,6 @@
 from datetime import UTC, datetime, timedelta
+from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 import secrets
 from typing import Annotated
@@ -9,15 +11,24 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.board_store import get_board_for_username, initialize_database, save_board_for_username
 
-app = FastAPI(title="Project Management MVP Backend")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    initialize_database(_database_path(), default_username=AUTH_USERNAME)
+    yield
+
+
+app = FastAPI(title="Project Management MVP Backend", lifespan=lifespan)
 FRONTEND_DIST_DIR = Path("/app/frontend_dist")
+DEFAULT_DB_PATH = Path("/app/backend/data/app.db")
 AUTH_USERNAME = "user"
 AUTH_PASSWORD = "password"
 TOKEN_TTL_HOURS = 8
 
 auth_scheme = HTTPBearer(auto_error=False)
-issued_tokens: dict[str, datetime] = {}
+issued_tokens: dict[str, tuple[datetime, str]] = {}
 
 
 class LoginRequest(BaseModel):
@@ -30,26 +41,67 @@ class LoginResponse(BaseModel):
     token_type: str = "Bearer"
 
 
+class CardModel(BaseModel):
+    id: str
+    title: str
+    details: str
+
+
+class ColumnModel(BaseModel):
+    id: str
+    title: str
+    cardIds: list[str]
+
+
+class BoardModel(BaseModel):
+    columns: list[ColumnModel]
+    cards: dict[str, CardModel]
+
+
+class BoardResponse(BaseModel):
+    board: BoardModel
+
+
+class BoardUpdateRequest(BaseModel):
+    board: BoardModel
+
+
+def _database_path() -> Path:
+    configured_path = os.getenv("DATABASE_PATH")
+    return Path(configured_path) if configured_path else DEFAULT_DB_PATH
+
+
 def _cleanup_expired_tokens() -> None:
     now = datetime.now(UTC)
     expired_tokens = [
-        token for token, expiry in issued_tokens.items() if expiry <= now
+        token for token, entry in issued_tokens.items() if entry[0] <= now
     ]
     for token in expired_tokens:
         issued_tokens.pop(token, None)
 
 
-def _issue_token() -> str:
+def _issue_token(username: str) -> str:
     _cleanup_expired_tokens()
     token = secrets.token_urlsafe(32)
-    issued_tokens[token] = datetime.now(UTC) + timedelta(hours=TOKEN_TTL_HOURS)
+    issued_tokens[token] = (
+        datetime.now(UTC) + timedelta(hours=TOKEN_TTL_HOURS),
+        username,
+    )
     return token
 
 
-def _validate_token(token: str) -> bool:
+def _validate_token(token: str) -> tuple[bool, str | None]:
     _cleanup_expired_tokens()
-    expiry = issued_tokens.get(token)
-    return expiry is not None and expiry > datetime.now(UTC)
+    token_entry = issued_tokens.get(token)
+    if token_entry is None:
+        return False, None
+
+    expiry, username = token_entry
+    if expiry <= datetime.now(UTC):
+        issued_tokens.pop(token, None)
+        return False, None
+
+    return True, username
 
 
 def _require_bearer_token(
@@ -57,15 +109,16 @@ def _require_bearer_token(
         HTTPAuthorizationCredentials | None,
         Depends(auth_scheme),
     ],
-) -> str:
+) -> tuple[str, str]:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=401, detail="Missing bearer token")
 
     token = credentials.credentials
-    if not _validate_token(token):
+    token_is_valid, username = _validate_token(token)
+    if not token_is_valid or username is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    return token
+    return token, username
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -73,14 +126,44 @@ async def login(payload: LoginRequest) -> LoginResponse:
     if payload.username != AUTH_USERNAME or payload.password != AUTH_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return LoginResponse(access_token=_issue_token())
+    return LoginResponse(access_token=_issue_token(payload.username))
 
 
 @app.get("/api/auth/validate")
 async def validate_token(
-    token: Annotated[str, Depends(_require_bearer_token)],
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
 ) -> dict[str, str]:
-    return {"status": "ok", "token": token}
+    token, username = auth
+    return {"status": "ok", "token": token, "username": username}
+
+
+@app.get("/api/board", response_model=BoardResponse)
+async def get_board(
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardResponse:
+    _, username = auth
+    board = get_board_for_username(_database_path(), username)
+    if board is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return BoardResponse(board=BoardModel.model_validate(board))
+
+
+@app.put("/api/board", response_model=BoardResponse)
+async def update_board(
+    payload: BoardUpdateRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardResponse:
+    _, username = auth
+    saved = save_board_for_username(
+        _database_path(),
+        username,
+        payload.board.model_dump(mode="json"),
+    )
+    if not saved:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return BoardResponse(board=payload.board)
 
 
 @app.get("/api/hello")

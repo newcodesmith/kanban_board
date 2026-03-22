@@ -82,38 +82,38 @@ Test scope baseline for all parts: practical MVP coverage (core happy paths + ke
 ## Part 5: Database modeling
 
 ### Scope checklist
-- [ ] Propose SQLite schema supporting multiple users
-- [ ] Store one board JSON document per user for MVP simplicity
-- [ ] Define migration/init strategy that creates DB if absent
-- [ ] Document schema and rationale in `docs/`
-- [ ] Pause for user sign-off before implementation in Part 6
+- [x] Propose SQLite schema supporting multiple users
+- [x] Store one board JSON document per user for MVP simplicity
+- [x] Define migration/init strategy that creates DB if absent
+- [x] Document schema and rationale in `docs/`
+- [x] Pause for user sign-off before implementation in Part 6
 
 ### Tests
-- [ ] Validate schema can represent all current board data
-- [ ] Validate sample insert/select round-trip for one user board JSON
+- [x] Validate schema can represent all current board data
+- [x] Validate sample insert/select round-trip for one user board JSON
 
 ### Success criteria
-- [ ] Schema doc approved by user
-- [ ] Data model supports future multi-user extension
-- [ ] Initialization strategy is clear and deterministic
+- [x] Schema doc approved by user
+- [x] Data model supports future multi-user extension
+- [x] Initialization strategy is clear and deterministic
 
 ## Part 6: Backend Kanban APIs
 
 ### Scope checklist
-- [ ] Implement DB initialization on startup (create if missing)
-- [ ] Add token-protected endpoints to read/update board for current user
-- [ ] Validate request payloads and return consistent response shapes
-- [ ] Add clear error responses for auth and data issues
+- [x] Implement DB initialization on startup (create if missing)
+- [x] Add token-protected endpoints to read/update board for current user
+- [x] Validate request payloads and return consistent response shapes
+- [x] Add clear error responses for auth and data issues
 
 ### Tests
-- [ ] Backend unit tests for service/repository logic
-- [ ] Backend API tests for auth-protected read/write routes
-- [ ] Negative tests: invalid token, malformed payload
+- [x] Backend unit tests for service/repository logic
+- [x] Backend API tests for auth-protected read/write routes
+- [x] Negative tests: invalid token, malformed payload
 
 ### Success criteria
-- [ ] Authenticated user can persist and retrieve board data
-- [ ] Unauthorized requests are rejected consistently
-- [ ] DB file auto-creates on first run
+- [x] Authenticated user can persist and retrieve board data
+- [x] Unauthorized requests are rejected consistently
+- [x] DB file auto-creates on first run
 
 ## Part 7: Frontend + backend integration
 
