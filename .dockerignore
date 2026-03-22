@@ -1,0 +1,13 @@
+.git
+.gitignore
+.DS_Store
+
+frontend/node_modules
+frontend/.next
+frontend/test-results
+
+backend/.venv
+backend/__pycache__
+
+docs
+scripts
