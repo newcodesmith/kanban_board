@@ -154,20 +154,20 @@ Test scope baseline for all parts: practical MVP coverage (core happy paths + ke
 ## Part 9: Structured output for chat + board update intent
 
 ### Scope checklist
-- [ ] Define structured output schema: assistant message + optional board update
-- [ ] Send board JSON + user message + conversation history to model
-- [ ] Validate model output against schema before applying
-- [ ] Return both chat response and optional board update payload
+- [x] Define structured output schema: assistant message + optional board update
+- [x] Send board JSON + user message + conversation history to model
+- [x] Validate model output against schema before applying
+- [x] Return both chat response and optional board update payload
 
 ### Tests
-- [ ] Unit tests for schema validation and parsing
-- [ ] Unit tests for no-update and with-update model responses
-- [ ] Integration tests with mocked AI responses for deterministic behavior
+- [x] Unit tests for schema validation and parsing
+- [x] Unit tests for no-update and with-update model responses
+- [x] Integration tests with mocked AI responses for deterministic behavior
 
 ### Success criteria
-- [ ] Backend consistently returns typed response contract
-- [ ] Invalid model output is rejected safely
-- [ ] Optional board updates are explicit and auditable
+- [x] Backend consistently returns typed response contract
+- [x] Invalid model output is rejected safely
+- [x] Optional board updates are explicit and auditable
 
 ## Part 10: Sidebar AI chat UI + live board refresh
 

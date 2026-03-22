@@ -1,17 +1,24 @@
 from datetime import UTC, datetime, timedelta
 from contextlib import asynccontextmanager
+import json
 import os
 from pathlib import Path
 import secrets
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.ai_client import AIClientError, OPENROUTER_MODEL, run_connectivity_prompt
+from app.ai_client import (
+    AIClientError,
+    ChatMessage,
+    OPENROUTER_MODEL,
+    run_chat_messages,
+    run_connectivity_prompt,
+)
 from app.board_store import get_board_for_username, initialize_database, save_board_for_username
 
 
@@ -30,6 +37,17 @@ TOKEN_TTL_HOURS = 8
 
 auth_scheme = HTTPBearer(auto_error=False)
 issued_tokens: dict[str, tuple[datetime, str]] = {}
+AI_CHAT_SYSTEM_PROMPT = """You are an assistant for a Kanban project board.
+You must return only valid JSON, with no markdown or extra text.
+Return an object with exactly two keys:
+- assistant_message: string
+- board_update: null or a full board object
+
+Rules:
+- Keep assistant_message concise and helpful.
+- Set board_update to null unless the user clearly asks to create, edit, move, or rename board content.
+- If board_update is present, it must be the full updated board matching the existing board schema.
+"""
 
 
 class LoginRequest(BaseModel):
@@ -74,6 +92,26 @@ class AIConnectivityRequest(BaseModel):
 class AIConnectivityResponse(BaseModel):
     message: str
     model: str
+
+
+class AIChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    message: str
+    conversation_history: list[AIChatHistoryMessage] = Field(default_factory=list)
+
+
+class AIModelOutput(BaseModel):
+    assistant_message: str
+    board_update: dict[str, Any] | None = None
+
+
+class AIChatResponse(BaseModel):
+    assistant_message: str
+    board_update: BoardModel | None = None
 
 
 def _database_path() -> Path:
@@ -129,6 +167,75 @@ def _require_bearer_token(
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     return token, username
+
+
+def _build_ai_chat_messages(
+    board: dict[str, Any],
+    conversation_history: list[AIChatHistoryMessage],
+    message: str,
+) -> list[ChatMessage]:
+    user_payload = {
+        "board": board,
+        "conversation_history": [item.model_dump(mode="json") for item in conversation_history],
+        "user_message": message,
+    }
+
+    return [
+        {
+            "role": "system",
+            "content": AI_CHAT_SYSTEM_PROMPT,
+        },
+        {
+            "role": "user",
+            "content": json.dumps(user_payload),
+        },
+    ]
+
+
+def _parse_ai_chat_output(raw_output: str) -> AIChatResponse:
+    try:
+        output_json = json.loads(raw_output)
+    except json.JSONDecodeError as exc:
+        raise AIClientError(
+            "AI model returned invalid structured output",
+            status_code=502,
+        ) from exc
+
+    if not isinstance(output_json, dict):
+        raise AIClientError(
+            "AI model returned invalid structured output",
+            status_code=502,
+        )
+
+    try:
+        output = AIModelOutput.model_validate(output_json)
+    except ValidationError as exc:
+        raise AIClientError(
+            "AI model returned invalid structured output",
+            status_code=502,
+        ) from exc
+
+    assistant_message = output.assistant_message.strip()
+    if not assistant_message:
+        raise AIClientError(
+            "AI model returned invalid structured output",
+            status_code=502,
+        )
+
+    board_update: BoardModel | None = None
+    if output.board_update is not None:
+        try:
+            board_update = BoardModel.model_validate(output.board_update)
+        except ValidationError as exc:
+            raise AIClientError(
+                "AI model returned invalid structured output",
+                status_code=502,
+            ) from exc
+
+    return AIChatResponse(
+        assistant_message=assistant_message,
+        board_update=board_update,
+    )
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
@@ -196,6 +303,35 @@ async def ai_connectivity(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     return AIConnectivityResponse(message=message, model=OPENROUTER_MODEL)
+
+
+@app.post("/api/ai/chat", response_model=AIChatResponse)
+async def ai_chat(
+    payload: AIChatRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> AIChatResponse:
+    _, username = auth
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Message is required")
+
+    board = get_board_for_username(_database_path(), username)
+    if board is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    ai_messages = _build_ai_chat_messages(
+        board=board,
+        conversation_history=payload.conversation_history,
+        message=message,
+    )
+
+    try:
+        raw_model_output = await run_chat_messages(ai_messages)
+        response_payload = _parse_ai_chat_output(raw_model_output)
+    except AIClientError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    return response_payload
 
 
 @app.get("/health")

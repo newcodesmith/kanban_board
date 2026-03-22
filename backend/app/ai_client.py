@@ -1,4 +1,5 @@
 import os
+from typing import Literal, TypedDict
 
 import httpx
 
@@ -15,6 +16,11 @@ class AIClientError(Exception):
         self.status_code = status_code
 
 
+class ChatMessage(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
 def _api_key() -> str:
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -29,15 +35,10 @@ def _request_headers(api_key: str) -> dict[str, str]:
     }
 
 
-def _request_payload(prompt: str) -> dict[str, object]:
+def _request_payload(messages: list[ChatMessage]) -> dict[str, object]:
     return {
         "model": OPENROUTER_MODEL,
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        "messages": messages,
     }
 
 
@@ -62,6 +63,10 @@ def _extract_message(response_json: dict[str, object]) -> str:
 
 
 async def run_connectivity_prompt(prompt: str) -> str:
+    return await run_chat_messages([{"role": "user", "content": prompt}])
+
+
+async def run_chat_messages(messages: list[ChatMessage]) -> str:
     api_key = _api_key()
 
     try:
@@ -69,7 +74,7 @@ async def run_connectivity_prompt(prompt: str) -> str:
             response = await client.post(
                 OPENROUTER_API_URL,
                 headers=_request_headers(api_key),
-                json=_request_payload(prompt),
+                json=_request_payload(messages),
             )
     except httpx.TimeoutException as exc:
         raise AIClientError("AI provider request timed out", status_code=504) from exc
