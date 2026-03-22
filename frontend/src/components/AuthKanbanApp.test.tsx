@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthKanbanApp } from "@/components/AuthKanbanApp";
+import { initialData } from "@/lib/kanban";
 
 const mockFetch = vi.fn();
 
@@ -26,6 +27,10 @@ describe("AuthKanbanApp", () => {
       ok: true,
       json: async () => ({ access_token: "token-123" }),
     });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ board: initialData }),
+    });
 
     render(<AuthKanbanApp />);
 
@@ -34,7 +39,7 @@ describe("AuthKanbanApp", () => {
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await screen.findByRole("button", { name: /log out/i });
-    expect(screen.getByRole("heading", { name: "Kanban Studio" })).toBeInTheDocument();
+    expect(await screen.findAllByRole("heading", { name: "Kanban Studio" })).not.toHaveLength(0);
     expect(window.sessionStorage.getItem("pm_auth_token")).toBe("token-123");
   });
 
@@ -60,6 +65,10 @@ describe("AuthKanbanApp", () => {
       ok: true,
       json: async () => ({ status: "ok" }),
     });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ board: initialData }),
+    });
 
     render(<AuthKanbanApp />);
 
@@ -70,6 +79,29 @@ describe("AuthKanbanApp", () => {
         },
       });
     });
+
+    await screen.findByRole("button", { name: /log out/i });
+  });
+
+  it("shows board load error and retry action", async () => {
+    window.sessionStorage.setItem("pm_auth_token", "saved-token");
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: "ok" }),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ detail: "failure" }),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ board: initialData }),
+    });
+
+    render(<AuthKanbanApp />);
+
+    await screen.findByText(/unable to load board/i);
+    await userEvent.click(screen.getByRole("button", { name: /retry/i }));
 
     await screen.findByRole("button", { name: /log out/i });
   });

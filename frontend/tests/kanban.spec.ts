@@ -30,6 +30,22 @@ test("adds a card to a column", async ({ page }) => {
   await expect(firstColumn.getByText("Playwright card")).toBeVisible();
 });
 
+test("persists board changes across refresh", async ({ page }) => {
+  await login(page);
+  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  const uniqueTitle = `Persisted card ${Date.now()}`;
+
+  await firstColumn.getByRole("button", { name: /add a card/i }).click();
+  await firstColumn.getByPlaceholder("Card title").fill(uniqueTitle);
+  await firstColumn.getByPlaceholder("Details").fill("Persistence check");
+  await firstColumn.getByRole("button", { name: /add card/i }).click();
+  await expect(firstColumn.getByText(uniqueTitle)).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("button", { name: /log out/i })).toBeVisible();
+  await expect(page.locator('[data-testid^="column-"]').first().getByText(uniqueTitle)).toBeVisible();
+});
+
 test("moves a card between columns", async ({ page }) => {
   await login(page);
   const card = page.getByTestId("card-card-1");

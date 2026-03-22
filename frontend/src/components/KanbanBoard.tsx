@@ -15,9 +15,22 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
 
-export const KanbanBoard = () => {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+type KanbanBoardProps = {
+  initialBoard?: BoardData;
+  onBoardChange?: (nextBoard: BoardData) => void;
+};
+
+export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) => {
+  const [board, setBoard] = useState<BoardData>(() => initialBoard ?? initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  const updateBoard = (updater: (current: BoardData) => BoardData) => {
+    setBoard((current) => {
+      const nextBoard = updater(current);
+      onBoardChange?.(nextBoard);
+      return nextBoard;
+    });
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -39,14 +52,14 @@ export const KanbanBoard = () => {
       return;
     }
 
-    setBoard((prev) => ({
+    updateBoard((prev) => ({
       ...prev,
       columns: moveCard(prev.columns, active.id as string, over.id as string),
     }));
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
+    updateBoard((prev) => ({
       ...prev,
       columns: prev.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
@@ -56,7 +69,7 @@ export const KanbanBoard = () => {
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
     const id = createId("card");
-    setBoard((prev) => ({
+    updateBoard((prev) => ({
       ...prev,
       cards: {
         ...prev.cards,
@@ -71,7 +84,7 @@ export const KanbanBoard = () => {
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
+    updateBoard((prev) => {
       return {
         ...prev,
         cards: Object.fromEntries(

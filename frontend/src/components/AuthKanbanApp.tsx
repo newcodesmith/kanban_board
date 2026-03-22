@@ -1,27 +1,30 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import {
+  getBoardRequest,
+  loginRequest,
+  updateBoardRequest,
+  validateTokenRequest,
+} from "@/lib/api";
+import type { BoardData } from "@/lib/kanban";
 
 const TOKEN_STORAGE_KEY = "pm_auth_token";
-
-const validateToken = async (token: string) => {
-  const response = await fetch("/api/auth/validate", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  return response.ok;
-};
 
 export const AuthKanbanApp = () => {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingBoard, setIsLoadingBoard] = useState(false);
+  const [isSavingBoard, setIsSavingBoard] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [boardErrorMessage, setBoardErrorMessage] = useState("");
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const saveQueueRef = useRef(Promise.resolve());
 
   useEffect(() => {
     const checkSession = async () => {
@@ -33,8 +36,9 @@ export const AuthKanbanApp = () => {
       }
 
       try {
-        const isTokenValid = await validateToken(storedToken);
-        if (isTokenValid) {
+        const tokenPayload = await validateTokenRequest(storedToken);
+        if (tokenPayload) {
+          setAuthToken(storedToken);
           setIsAuthenticated(true);
         } else {
           window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
@@ -49,32 +53,48 @@ export const AuthKanbanApp = () => {
     void checkSession();
   }, []);
 
+  const loadBoard = async (token: string) => {
+    setIsLoadingBoard(true);
+    setBoardErrorMessage("");
+
+    try {
+      const payload = await getBoardRequest(token);
+      setBoard(payload.board);
+    } catch {
+      setBoardErrorMessage("Unable to load board.");
+    } finally {
+      setIsLoadingBoard(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !authToken) {
+      return;
+    }
+
+    void loadBoard(authToken);
+  }, [isAuthenticated, authToken]);
+
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage("");
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (!response.ok) {
+      const payload = await loginRequest(username, password);
+      if (!payload.access_token) {
         setErrorMessage("Invalid username or password.");
         setIsSubmitting(false);
         return;
       }
 
-      const payload = (await response.json()) as { access_token: string };
       window.sessionStorage.setItem(TOKEN_STORAGE_KEY, payload.access_token);
+      setAuthToken(payload.access_token);
       setIsAuthenticated(true);
       setPassword("");
+      setBoardErrorMessage("");
     } catch {
-      setErrorMessage("Unable to sign in right now.");
+      setErrorMessage("Invalid username or password.");
     } finally {
       setIsSubmitting(false);
     }
@@ -83,9 +103,33 @@ export const AuthKanbanApp = () => {
   const handleLogout = () => {
     window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     setIsAuthenticated(false);
+    setAuthToken(null);
+    setBoard(null);
+    setBoardErrorMessage("");
     setUsername("");
     setPassword("");
     setErrorMessage("");
+  };
+
+  const handleBoardChange = (nextBoard: BoardData) => {
+    if (!authToken) {
+      return;
+    }
+
+    setBoard(nextBoard);
+    setBoardErrorMessage("");
+
+    saveQueueRef.current = saveQueueRef.current
+      .then(async () => {
+        setIsSavingBoard(true);
+        await updateBoardRequest(authToken, nextBoard);
+      })
+      .catch(() => {
+        setBoardErrorMessage("Unable to save board changes.");
+      })
+      .finally(() => {
+        setIsSavingBoard(false);
+      });
   };
 
   if (isCheckingSession) {
@@ -159,9 +203,45 @@ export const AuthKanbanApp = () => {
     );
   }
 
+  if (isAuthenticated && (isLoadingBoard || !board)) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--surface)] px-4">
+        <div className="rounded-2xl border border-[var(--stroke)] bg-white px-6 py-4 shadow-[var(--shadow)]">
+          <p className="text-sm font-semibold text-[var(--gray-text)]">Loading board...</p>
+          {boardErrorMessage ? (
+            <div className="mt-3 space-y-3">
+              <p className="text-sm font-medium text-[var(--secondary-purple)]">{boardErrorMessage}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (authToken) {
+                    void loadBoard(authToken);
+                  }
+                }}
+                className="rounded-full border border-[var(--stroke)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] transition hover:border-[var(--primary-blue)]"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute left-0 top-0 z-20 h-24 w-full bg-gradient-to-b from-[var(--surface)] to-transparent" />
+      {isSavingBoard ? (
+        <div className="absolute left-6 top-6 z-30 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--gray-text)] shadow-[var(--shadow)]">
+          Saving...
+        </div>
+      ) : null}
+      {boardErrorMessage ? (
+        <div className="absolute left-6 top-16 z-30 rounded-xl border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold text-[var(--secondary-purple)] shadow-[var(--shadow)]">
+          {boardErrorMessage}
+        </div>
+      ) : null}
       <button
         type="button"
         onClick={handleLogout}
@@ -169,7 +249,7 @@ export const AuthKanbanApp = () => {
       >
         Log out
       </button>
-      <KanbanBoard />
+      {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
     </div>
   );
 };

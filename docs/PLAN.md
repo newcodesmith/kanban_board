@@ -118,20 +118,20 @@ Test scope baseline for all parts: practical MVP coverage (core happy paths + ke
 ## Part 7: Frontend + backend integration
 
 ### Scope checklist
-- [ ] Replace local in-memory board usage with API-backed state
-- [ ] Load board on app start after auth
-- [ ] Persist rename/add/delete/move actions through backend
-- [ ] Add minimal loading/error states
+- [x] Replace local in-memory board usage with API-backed state
+- [x] Load board on app start after auth
+- [x] Persist rename/add/delete/move actions through backend
+- [x] Add minimal loading/error states
 
 ### Tests
-- [ ] Frontend unit tests for API integration boundaries (mocked)
-- [ ] Integration/e2e tests for persistence across refresh
-- [ ] E2E for core card and column interactions with backend
+- [x] Frontend unit tests for API integration boundaries (mocked)
+- [x] Integration/e2e tests for persistence across refresh
+- [x] E2E for core card and column interactions with backend
 
 ### Success criteria
-- [ ] Board changes survive page reload
-- [ ] UI remains responsive and behaviorally equivalent to current demo
-- [ ] Integration test suite covers core paths
+- [x] Board changes survive page reload
+- [x] UI remains responsive and behaviorally equivalent to current demo
+- [x] Integration test suite covers core paths
 
 ## Part 8: AI connectivity (OpenRouter)
 

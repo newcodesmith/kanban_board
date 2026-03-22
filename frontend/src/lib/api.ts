@@ -1,0 +1,61 @@
+import type { BoardData } from "@/lib/kanban";
+
+const getJson = async <T>(response: Response): Promise<T> => {
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+export const loginRequest = async (username: string, password: string) => {
+  const response = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  return getJson<{ access_token: string; token_type: string }>(response);
+};
+
+export const validateTokenRequest = async (token: string) => {
+  const response = await fetch("/api/auth/validate", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return (await response.json()) as {
+    status: string;
+    token: string;
+    username: string;
+  };
+};
+
+export const getBoardRequest = async (token: string) => {
+  const response = await fetch("/api/board", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return getJson<{ board: BoardData }>(response);
+};
+
+export const updateBoardRequest = async (token: string, board: BoardData) => {
+  const response = await fetch("/api/board", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ board }),
+  });
+
+  return getJson<{ board: BoardData }>(response);
+};

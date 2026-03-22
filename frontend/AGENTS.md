@@ -17,33 +17,36 @@ This document describes the current frontend MVP in `frontend/`.
 - User must sign in with hardcoded credentials (`user` / `password`) before seeing the board.
 - Auth token is stored in `sessionStorage` for browser-session persistence.
 - Logout clears session token and returns to login screen.
-- Board remains client-side and in-memory after login (no board persistence yet).
+- Board data is loaded from backend API after login.
+- Board mutations (rename/add/delete/move) are persisted to backend API.
+- Board changes survive page refresh.
 - Board has 5 columns by default and seeded card data from `src/lib/kanban.ts`.
 - Supported interactions:
   - Rename column titles inline
   - Add cards per column
   - Remove cards
   - Drag cards within and across columns
-- No board persistence and no AI chat yet.
+- No AI chat yet.
 
 ## Key files
 
 - `src/app/page.tsx`: renders auth-gated app entry.
-- `src/components/AuthKanbanApp.tsx`: login/logout flow and token validation.
-- `src/components/KanbanBoard.tsx`: top-level board state and dnd handlers.
+- `src/components/AuthKanbanApp.tsx`: login/logout flow, token validation, board load/save orchestration.
+- `src/components/KanbanBoard.tsx`: board interaction UI and board-change emissions.
 - `src/components/KanbanColumn.tsx`: column UI, rename input, drop zone, new card form.
 - `src/components/KanbanCard.tsx`: sortable card UI and remove action.
 - `src/components/NewCardForm.tsx`: inline add-card form.
 - `src/components/KanbanCardPreview.tsx`: drag overlay preview.
+- `src/lib/api.ts`: frontend API client for auth and board endpoints.
 - `src/lib/kanban.ts`: board types, seed data, `moveCard`, `createId`.
 - `src/app/globals.css`: theme tokens and global styles.
 
 ## State and data flow
 
-- `KanbanBoard` owns `board` state (`columns` + `cards`) and active drag card state.
-- Child components receive callbacks for rename/add/delete.
+- `AuthKanbanApp` owns auth session, board loading, and board persistence side effects.
+- `KanbanBoard` handles interaction logic and emits full board snapshots on mutation.
 - Card movement is centralized in `moveCard(columns, activeId, overId)`.
-- IDs for new cards are generated client-side by `createId`.
+- IDs for new cards are generated client-side by `createId` and persisted via API.
 
 ## Styling and design tokens
 
@@ -57,6 +60,7 @@ This document describes the current frontend MVP in `frontend/`.
 - Unit/component:
   - `src/components/AuthKanbanApp.test.tsx`
   - `src/components/KanbanBoard.test.tsx`
+  - `src/lib/api.test.ts`
   - `src/lib/kanban.test.ts`
 - E2E:
   - `tests/kanban.spec.ts`
