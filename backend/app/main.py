@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.ai_client import AIClientError, OPENROUTER_MODEL, run_connectivity_prompt
 from app.board_store import get_board_for_username, initialize_database, save_board_for_username
 
 
@@ -64,6 +65,15 @@ class BoardResponse(BaseModel):
 
 class BoardUpdateRequest(BaseModel):
     board: BoardModel
+
+
+class AIConnectivityRequest(BaseModel):
+    prompt: str
+
+
+class AIConnectivityResponse(BaseModel):
+    message: str
+    model: str
 
 
 def _database_path() -> Path:
@@ -169,6 +179,23 @@ async def update_board(
 @app.get("/api/hello")
 async def api_hello() -> dict[str, str]:
     return {"message": "Hello from FastAPI API"}
+
+
+@app.post("/api/ai/connectivity", response_model=AIConnectivityResponse)
+async def ai_connectivity(
+    payload: AIConnectivityRequest,
+    _auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> AIConnectivityResponse:
+    prompt = payload.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="Prompt is required")
+
+    try:
+        message = await run_connectivity_prompt(prompt)
+    except AIClientError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    return AIConnectivityResponse(message=message, model=OPENROUTER_MODEL)
 
 
 @app.get("/health")

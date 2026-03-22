@@ -136,20 +136,20 @@ Test scope baseline for all parts: practical MVP coverage (core happy paths + ke
 ## Part 8: AI connectivity (OpenRouter)
 
 ### Scope checklist
-- [ ] Add backend AI client using `OPENROUTER_API_KEY`
-- [ ] Configure model `openai/gpt-oss-120b`
-- [ ] Add backend route to run a basic connectivity prompt
-- [ ] Implement timeout and concise error handling
+- [x] Add backend AI client using `OPENROUTER_API_KEY`
+- [x] Configure model `openai/gpt-oss-120b`
+- [x] Add backend route to run a basic connectivity prompt
+- [x] Implement timeout and concise error handling
 
 ### Tests
-- [ ] Unit test for AI client request construction (mock HTTP)
-- [ ] Integration test path with mocked provider response
-- [ ] Manual live check prompt `2+2` when key is present
+- [x] Unit test for AI client request construction (mock HTTP)
+- [x] Integration test path with mocked provider response
+- [x] Manual live check prompt `2+2` when key is present
 
 ### Success criteria
-- [ ] Backend can successfully call OpenRouter
-- [ ] Failures return safe, actionable error messages
-- [ ] Connectivity path is isolated and testable
+- [x] Backend can successfully call OpenRouter
+- [x] Failures return safe, actionable error messages
+- [x] Connectivity path is isolated and testable
 
 ## Part 9: Structured output for chat + board update intent
 
