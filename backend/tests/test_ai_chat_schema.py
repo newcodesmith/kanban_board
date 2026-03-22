@@ -35,6 +35,17 @@ def test_parse_ai_chat_output_with_board_update() -> None:
     assert result.board_update.columns[0].id == "col-backlog"
 
 
+def test_parse_ai_chat_output_accepts_markdown_fenced_json() -> None:
+    result = _parse_ai_chat_output(
+        """```json
+{"assistant_message":"Done.","board_update":null}
+```"""
+    )
+
+    assert result.assistant_message == "Done."
+    assert result.board_update is None
+
+
 def test_parse_ai_chat_output_rejects_invalid_json() -> None:
     with pytest.raises(AIClientError) as exc_info:
         _parse_ai_chat_output("not-json")

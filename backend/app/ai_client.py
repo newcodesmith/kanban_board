@@ -35,11 +35,24 @@ def _request_headers(api_key: str) -> dict[str, str]:
     }
 
 
-def _request_payload(messages: list[ChatMessage]) -> dict[str, object]:
-    return {
+def _request_payload(
+    messages: list[ChatMessage],
+    max_tokens: int | None = None,
+    response_format: dict[str, object] | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "model": OPENROUTER_MODEL,
         "messages": messages,
+        "temperature": 0,
     }
+
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+
+    if response_format is not None:
+        payload["response_format"] = response_format
+
+    return payload
 
 
 def _extract_message(response_json: dict[str, object]) -> str:
@@ -56,17 +69,44 @@ def _extract_message(response_json: dict[str, object]) -> str:
         raise AIClientError("AI provider returned an invalid response", status_code=502)
 
     content = message.get("content")
-    if not isinstance(content, str) or not content.strip():
-        raise AIClientError("AI provider returned an empty message", status_code=502)
+    if isinstance(content, str) and content.strip():
+        return content
 
-    return content
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                if item.strip():
+                    text_parts.append(item)
+                continue
+
+            if not isinstance(item, dict):
+                continue
+
+            text_value = item.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                text_parts.append(text_value)
+
+        merged_content = "".join(text_parts).strip()
+        if merged_content:
+            return merged_content
+
+    fallback_text = first_choice.get("text")
+    if isinstance(fallback_text, str) and fallback_text.strip():
+        return fallback_text
+
+    raise AIClientError("AI provider returned an empty message", status_code=502)
 
 
 async def run_connectivity_prompt(prompt: str) -> str:
     return await run_chat_messages([{"role": "user", "content": prompt}])
 
 
-async def run_chat_messages(messages: list[ChatMessage]) -> str:
+async def run_chat_messages(
+    messages: list[ChatMessage],
+    max_tokens: int | None = None,
+    response_format: dict[str, object] | None = None,
+) -> str:
     api_key = _api_key()
 
     try:
@@ -74,7 +114,11 @@ async def run_chat_messages(messages: list[ChatMessage]) -> str:
             response = await client.post(
                 OPENROUTER_API_URL,
                 headers=_request_headers(api_key),
-                json=_request_payload(messages),
+                json=_request_payload(
+                    messages,
+                    max_tokens=max_tokens,
+                    response_format=response_format,
+                ),
             )
     except httpx.TimeoutException as exc:
         raise AIClientError("AI provider request timed out", status_code=504) from exc

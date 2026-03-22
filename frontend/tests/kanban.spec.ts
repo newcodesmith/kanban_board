@@ -70,6 +70,51 @@ test("moves a card between columns", async ({ page }) => {
   await expect(targetColumn.getByTestId("card-card-1")).toBeVisible();
 });
 
+test("applies ai chat board update in the UI", async ({ page }) => {
+  await login(page);
+  const token = await page.evaluate(() => window.sessionStorage.getItem("pm_auth_token"));
+  if (!token) {
+    throw new Error("Missing auth token after login.");
+  }
+
+  await page.route("**/api/ai/chat", async (route) => {
+    const boardResponse = await page.request.get("/api/board", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const boardPayload = (await boardResponse.json()) as {
+      board: {
+        columns: Array<{ id: string; title: string; cardIds: string[] }>;
+        cards: Record<string, { id: string; title: string; details: string }>;
+      };
+    };
+    const updatedBoard = {
+      ...boardPayload.board,
+      columns: boardPayload.board.columns.map((column, index) =>
+        index === 0 ? { ...column, title: "Now" } : column
+      ),
+    };
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        assistant_message: "Updated.",
+        board_update: updatedBoard,
+      }),
+    });
+  });
+
+  await page.getByLabel("Message").fill("Rename backlog to now");
+  await page.getByRole("button", { name: /^send$/i }).click();
+
+  await expect(page.getByText("Updated.")).toBeVisible();
+  await expect(page.getByTestId("column-col-backlog").getByLabel("Column title")).toHaveValue(
+    "Now"
+  );
+});
+
 test("logs out to return to login screen", async ({ page }) => {
   await login(page);
   await page.getByRole("button", { name: /log out/i }).click();

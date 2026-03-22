@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import {
+  aiChatRequest,
+  type AIChatMessage,
   getBoardRequest,
   loginRequest,
   updateBoardRequest,
@@ -21,6 +23,10 @@ export const AuthKanbanApp = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [boardErrorMessage, setBoardErrorMessage] = useState("");
   const [board, setBoard] = useState<BoardData | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<AIChatMessage[]>([]);
+  const [chatErrorMessage, setChatErrorMessage] = useState("");
+  const [isSendingChat, setIsSendingChat] = useState(false);
   const [authToken, setAuthToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -105,19 +111,19 @@ export const AuthKanbanApp = () => {
     setIsAuthenticated(false);
     setAuthToken(null);
     setBoard(null);
+    setChatInput("");
+    setChatMessages([]);
+    setChatErrorMessage("");
     setBoardErrorMessage("");
     setUsername("");
     setPassword("");
     setErrorMessage("");
   };
 
-  const handleBoardChange = (nextBoard: BoardData) => {
+  const enqueueBoardSave = (nextBoard: BoardData) => {
     if (!authToken) {
       return;
     }
-
-    setBoard(nextBoard);
-    setBoardErrorMessage("");
 
     saveQueueRef.current = saveQueueRef.current
       .then(async () => {
@@ -130,6 +136,63 @@ export const AuthKanbanApp = () => {
       .finally(() => {
         setIsSavingBoard(false);
       });
+  };
+
+  const handleBoardChange = (nextBoard: BoardData) => {
+    if (!authToken) {
+      return;
+    }
+
+    setBoard(nextBoard);
+    setBoardErrorMessage("");
+    enqueueBoardSave(nextBoard);
+  };
+
+  const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!authToken) {
+      return;
+    }
+
+    const message = chatInput.trim();
+    if (!message) {
+      return;
+    }
+
+    const history = [...chatMessages];
+    const userMessage: AIChatMessage = {
+      role: "user",
+      content: message,
+    };
+
+    setChatMessages((current) => [...current, userMessage]);
+    setChatInput("");
+    setChatErrorMessage("");
+    setIsSendingChat(true);
+
+    try {
+      const response = await aiChatRequest(authToken, message, history);
+      const assistantMessage: AIChatMessage = {
+        role: "assistant",
+        content: response.assistant_message,
+      };
+      setChatMessages((current) => [...current, assistantMessage]);
+
+      if (response.board_update) {
+        setBoard(response.board_update);
+        setBoardErrorMessage("");
+        enqueueBoardSave(response.board_update);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message) {
+        setChatErrorMessage(error.message);
+      } else {
+        setChatErrorMessage("Unable to send message.");
+      }
+    } finally {
+      setIsSendingChat(false);
+    }
   };
 
   if (isCheckingSession) {
@@ -230,7 +293,7 @@ export const AuthKanbanApp = () => {
   }
 
   return (
-    <div className="relative">
+    <div className="relative xl:pr-[380px]">
       <div className="pointer-events-none absolute left-0 top-0 z-20 h-24 w-full bg-gradient-to-b from-[var(--surface)] to-transparent" />
       {isSavingBoard ? (
         <div className="absolute left-6 top-6 z-30 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--gray-text)] shadow-[var(--shadow)]">
@@ -249,6 +312,53 @@ export const AuthKanbanApp = () => {
       >
         Log out
       </button>
+      <aside className="fixed right-6 top-20 z-30 flex h-[calc(100vh-7rem)] w-[340px] flex-col rounded-3xl border border-[var(--stroke)] bg-white p-4 shadow-[var(--shadow)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+          AI Chat
+        </p>
+        <h2 className="mt-2 font-display text-xl font-semibold text-[var(--navy-dark)]">
+          Board Assistant
+        </h2>
+        <div className="mt-4 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3">
+          {chatMessages.length === 0 ? (
+            <p className="text-sm text-[var(--gray-text)]">Ask for planning help or board updates.</p>
+          ) : null}
+          {chatMessages.map((chatMessage, index) => (
+            <div
+              key={`${chatMessage.role}-${index}`}
+              className="rounded-xl border border-[var(--stroke)] bg-white px-3 py-2"
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+                {chatMessage.role}
+              </p>
+              <p className="mt-1 text-sm text-[var(--navy-dark)]">{chatMessage.content}</p>
+            </div>
+          ))}
+        </div>
+
+        <form className="mt-3 space-y-2" onSubmit={handleChatSubmit}>
+          <label htmlFor="ai-chat-input" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
+            Message
+          </label>
+          <textarea
+            id="ai-chat-input"
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            placeholder="Ask AI to update cards or give guidance"
+            className="h-24 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+          />
+          {chatErrorMessage ? (
+            <p className="text-xs font-semibold text-[var(--secondary-purple)]">{chatErrorMessage}</p>
+          ) : null}
+          <button
+            type="submit"
+            className="w-full rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:brightness-110 disabled:opacity-70"
+            disabled={isSendingChat}
+          >
+            {isSendingChat ? "Sending..." : "Send"}
+          </button>
+        </form>
+      </aside>
       {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
     </div>
   );

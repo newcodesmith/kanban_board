@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,6 +23,12 @@ type KanbanBoardProps = {
 export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialBoard ?? initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialBoard) {
+      setBoard(initialBoard);
+    }
+  }, [initialBoard]);
 
   const updateBoard = (updater: (current: BoardData) => BoardData) => {
     setBoard((current) => {

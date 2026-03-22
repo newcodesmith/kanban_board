@@ -1,8 +1,30 @@
 import type { BoardData } from "@/lib/kanban";
 
+export type AIChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AIChatResponse = {
+  assistant_message: string;
+  board_update: BoardData | null;
+};
+
 const getJson = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    let detailMessage = "";
+    try {
+      const errorPayload = (await response.json()) as { detail?: string };
+      if (typeof errorPayload.detail === "string") {
+        detailMessage = errorPayload.detail;
+      }
+    } catch {
+      detailMessage = "";
+    }
+
+    throw new Error(
+      detailMessage || `Request failed with status ${response.status}`
+    );
   }
   return (await response.json()) as T;
 };
@@ -58,4 +80,24 @@ export const updateBoardRequest = async (token: string, board: BoardData) => {
   });
 
   return getJson<{ board: BoardData }>(response);
+};
+
+export const aiChatRequest = async (
+  token: string,
+  message: string,
+  conversationHistory: AIChatMessage[]
+) => {
+  const response = await fetch("/api/ai/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      message,
+      conversation_history: conversationHistory,
+    }),
+  });
+
+  return getJson<AIChatResponse>(response);
 };

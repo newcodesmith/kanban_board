@@ -37,6 +37,13 @@ TOKEN_TTL_HOURS = 8
 
 auth_scheme = HTTPBearer(auto_error=False)
 issued_tokens: dict[str, tuple[datetime, str]] = {}
+MAX_CHAT_HISTORY_MESSAGES = 8
+AI_CHAT_MAX_TOKENS = 300
+AI_CHAT_RESPONSE_FORMAT = {"type": "json_object"}
+RETRYABLE_AI_CHAT_ERRORS = {
+    "AI model returned invalid structured output",
+    "AI provider returned an empty message",
+}
 AI_CHAT_SYSTEM_PROMPT = """You are an assistant for a Kanban project board.
 You must return only valid JSON, with no markdown or extra text.
 Return an object with exactly two keys:
@@ -47,6 +54,12 @@ Rules:
 - Keep assistant_message concise and helpful.
 - Set board_update to null unless the user clearly asks to create, edit, move, or rename board content.
 - If board_update is present, it must be the full updated board matching the existing board schema.
+"""
+AI_CHAT_RETRY_SYSTEM_PROMPT = """Your previous answer was invalid.
+Return strictly valid JSON with exactly:
+- assistant_message (string)
+- board_update (null or full board object)
+Do not include markdown, code fences, or extra keys.
 """
 
 
@@ -174,9 +187,10 @@ def _build_ai_chat_messages(
     conversation_history: list[AIChatHistoryMessage],
     message: str,
 ) -> list[ChatMessage]:
+    trimmed_history = conversation_history[-MAX_CHAT_HISTORY_MESSAGES:]
     user_payload = {
         "board": board,
-        "conversation_history": [item.model_dump(mode="json") for item in conversation_history],
+        "conversation_history": [item.model_dump(mode="json") for item in trimmed_history],
         "user_message": message,
     }
 
@@ -193,15 +207,36 @@ def _build_ai_chat_messages(
 
 
 def _parse_ai_chat_output(raw_output: str) -> AIChatResponse:
-    try:
-        output_json = json.loads(raw_output)
-    except json.JSONDecodeError as exc:
-        raise AIClientError(
-            "AI model returned invalid structured output",
-            status_code=502,
-        ) from exc
+    normalized_output = raw_output.strip()
+    json_candidates = [normalized_output]
 
-    if not isinstance(output_json, dict):
+    if normalized_output.startswith("```"):
+        stripped_lines = normalized_output.splitlines()
+        if len(stripped_lines) >= 2:
+            inner_lines = stripped_lines[1:]
+            if inner_lines and inner_lines[-1].strip().startswith("```"):
+                inner_lines = inner_lines[:-1]
+            json_candidates.append("\n".join(inner_lines).strip())
+
+    first_brace = normalized_output.find("{")
+    last_brace = normalized_output.rfind("}")
+    if first_brace != -1 and last_brace != -1 and first_brace < last_brace:
+        json_candidates.append(normalized_output[first_brace : last_brace + 1])
+
+    output_json: dict[str, Any] | None = None
+    for candidate in json_candidates:
+        if not candidate:
+            continue
+        try:
+            parsed_candidate = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed_candidate, dict):
+            output_json = parsed_candidate
+            break
+
+    if output_json is None:
         raise AIClientError(
             "AI model returned invalid structured output",
             status_code=502,
@@ -325,13 +360,31 @@ async def ai_chat(
         message=message,
     )
 
-    try:
-        raw_model_output = await run_chat_messages(ai_messages)
-        response_payload = _parse_ai_chat_output(raw_model_output)
-    except AIClientError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    for attempt in range(2):
+        attempt_messages = list(ai_messages)
+        if attempt == 1:
+            attempt_messages.append(
+                {
+                    "role": "system",
+                    "content": AI_CHAT_RETRY_SYSTEM_PROMPT,
+                }
+            )
 
-    return response_payload
+        try:
+            raw_model_output = await run_chat_messages(
+                attempt_messages,
+                max_tokens=AI_CHAT_MAX_TOKENS,
+                response_format=AI_CHAT_RESPONSE_FORMAT,
+            )
+            return _parse_ai_chat_output(raw_model_output)
+        except AIClientError as exc:
+            is_retryable_error = exc.detail in RETRYABLE_AI_CHAT_ERRORS
+            should_retry = attempt == 0 and is_retryable_error
+            if should_retry:
+                continue
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    raise HTTPException(status_code=502, detail="AI model returned invalid structured output")
 
 
 @app.get("/health")

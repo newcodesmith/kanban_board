@@ -38,8 +38,14 @@ def test_ai_chat_returns_message_without_board_update(
     issued_tokens.clear()
     captured_messages: list[dict[str, str]] = []
 
-    async def _fake_run_chat_messages(messages: list[dict[str, str]]) -> str:
+    async def _fake_run_chat_messages(
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        response_format: dict[str, object] | None = None,
+    ) -> str:
         captured_messages.extend(messages)
+        assert max_tokens == 300
+        assert response_format == {"type": "json_object"}
         return json.dumps(
             {
                 "assistant_message": "No board changes needed.",
@@ -92,7 +98,13 @@ def test_ai_chat_returns_optional_board_update(
     next_board = json.loads(json.dumps(DEFAULT_BOARD))
     next_board["columns"][0]["title"] = "Now"
 
-    async def _fake_run_chat_messages(_messages: list[dict[str, str]]) -> str:
+    async def _fake_run_chat_messages(
+        _messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        response_format: dict[str, object] | None = None,
+    ) -> str:
+        assert max_tokens == 300
+        assert response_format == {"type": "json_object"}
         return json.dumps(
             {
                 "assistant_message": "Renamed backlog to now.",
@@ -123,7 +135,11 @@ def test_ai_chat_rejects_invalid_model_output(
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "app.db"))
     issued_tokens.clear()
 
-    async def _fake_run_chat_messages(_messages: list[dict[str, str]]) -> str:
+    async def _fake_run_chat_messages(
+        _messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        response_format: dict[str, object] | None = None,
+    ) -> str:
         return "not-json"
 
     monkeypatch.setattr("app.main.run_chat_messages", _fake_run_chat_messages)
@@ -138,3 +154,89 @@ def test_ai_chat_rejects_invalid_model_output(
 
         assert response.status_code == 502
         assert response.json()["detail"] == "AI model returned invalid structured output"
+
+
+def test_ai_chat_retries_once_for_invalid_structured_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "app.db"))
+    issued_tokens.clear()
+    call_count = 0
+
+    async def _fake_run_chat_messages(
+        _messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        response_format: dict[str, object] | None = None,
+    ) -> str:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return "not-json"
+        return json.dumps(
+            {
+                "assistant_message": "Recovered.",
+                "board_update": None,
+            }
+        )
+
+    monkeypatch.setattr("app.main.run_chat_messages", _fake_run_chat_messages)
+
+    with TestClient(app) as client:
+        headers = _login_and_get_headers(client)
+        response = client.post(
+            "/api/ai/chat",
+            headers=headers,
+            json={"message": "Rename backlog to now"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["assistant_message"] == "Recovered."
+        assert call_count == 2
+
+
+def test_ai_chat_trims_conversation_history_to_recent_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "app.db"))
+    issued_tokens.clear()
+    captured_messages: list[dict[str, str]] = []
+
+    async def _fake_run_chat_messages(
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        response_format: dict[str, object] | None = None,
+    ) -> str:
+        captured_messages.extend(messages)
+        assert max_tokens == 300
+        assert response_format == {"type": "json_object"}
+        return json.dumps(
+            {
+                "assistant_message": "ok",
+                "board_update": None,
+            }
+        )
+
+    monkeypatch.setattr("app.main.run_chat_messages", _fake_run_chat_messages)
+
+    history = [
+        {"role": "user", "content": f"msg-{index}"}
+        for index in range(12)
+    ]
+
+    with TestClient(app) as client:
+        headers = _login_and_get_headers(client)
+        response = client.post(
+            "/api/ai/chat",
+            headers=headers,
+            json={
+                "message": "latest",
+                "conversation_history": history,
+            },
+        )
+
+        assert response.status_code == 200
+
+    payload = json.loads(captured_messages[1]["content"])
+    assert payload["conversation_history"] == history[-8:]

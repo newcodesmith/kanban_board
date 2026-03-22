@@ -87,6 +87,43 @@ def test_run_connectivity_prompt_builds_expected_request(monkeypatch: pytest.Mon
     assert captured["json"] == {
         "model": ai_client.OPENROUTER_MODEL,
         "messages": [{"role": "user", "content": "2+2"}],
+        "temperature": 0,
+    }
+
+
+def test_run_chat_messages_passes_optional_request_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    def _factory(*, timeout: float) -> _FakeAsyncClient:
+        return _FakeAsyncClient(
+            timeout,
+            response=_FakeResponse(
+                200,
+                {"choices": [{"message": {"content": "ok"}}]},
+            ),
+            capture=captured,
+        )
+
+    monkeypatch.setattr(ai_client.httpx, "AsyncClient", _factory)
+
+    result = asyncio.run(
+        ai_client.run_chat_messages(
+            [{"role": "user", "content": "hi"}],
+            max_tokens=120,
+            response_format={"type": "json_object"},
+        )
+    )
+
+    assert result == "ok"
+    assert captured["json"] == {
+        "model": ai_client.OPENROUTER_MODEL,
+        "messages": [{"role": "user", "content": "hi"}],
+        "temperature": 0,
+        "max_tokens": 120,
+        "response_format": {"type": "json_object"},
     }
 
 
@@ -121,3 +158,34 @@ def test_run_connectivity_prompt_reports_provider_error(monkeypatch: pytest.Monk
 
     assert exc_info.value.status_code == 502
     assert exc_info.value.detail == "AI provider returned an error"
+
+
+def test_run_connectivity_prompt_extracts_text_from_content_parts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    def _factory(*, timeout: float) -> _FakeAsyncClient:
+        return _FakeAsyncClient(
+            timeout,
+            response=_FakeResponse(
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": [
+                                    {"type": "text", "text": "{\"assistant_message\":"},
+                                    {"type": "text", "text": " \"ok\", \"board_update\": null}"},
+                                ]
+                            }
+                        }
+                    ]
+                },
+            ),
+        )
+
+    monkeypatch.setattr(ai_client.httpx, "AsyncClient", _factory)
+
+    result = asyncio.run(ai_client.run_connectivity_prompt("2+2"))
+    assert result == '{"assistant_message": "ok", "board_update": null}'

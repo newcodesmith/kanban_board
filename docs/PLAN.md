@@ -172,21 +172,21 @@ Test scope baseline for all parts: practical MVP coverage (core happy paths + ke
 ## Part 10: Sidebar AI chat UI + live board refresh
 
 ### Scope checklist
-- [ ] Add sidebar chat UI in frontend layout
-- [ ] Send user prompts and display conversation history
-- [ ] Apply backend-provided board updates to UI state
-- [ ] Refresh board immediately when update payload is present
-- [ ] Keep UX minimal and aligned with existing design tokens
+- [x] Add sidebar chat UI in frontend layout
+- [x] Send user prompts and display conversation history
+- [x] Apply backend-provided board updates to UI state
+- [x] Refresh board immediately when update payload is present
+- [x] Keep UX minimal and aligned with existing design tokens
 
 ### Tests
-- [ ] Component tests for chat input/message rendering
-- [ ] Integration tests for successful chat roundtrip
-- [ ] E2E test for AI-triggered board update reflected in Kanban UI
+- [x] Component tests for chat input/message rendering
+- [x] Integration tests for successful chat roundtrip
+- [x] E2E test for AI-triggered board update reflected in Kanban UI
 
 ### Success criteria
-- [ ] User can chat with AI from sidebar
-- [ ] AI responses render reliably
-- [ ] Board updates from AI appear automatically without manual refresh
+- [x] User can chat with AI from sidebar
+- [x] AI responses render reliably
+- [x] Board updates from AI appear automatically without manual refresh
 
 ## Notes for execution
 

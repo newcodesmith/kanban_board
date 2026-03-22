@@ -1,4 +1,10 @@
-import { getBoardRequest, loginRequest, updateBoardRequest, validateTokenRequest } from "@/lib/api";
+import {
+  aiChatRequest,
+  getBoardRequest,
+  loginRequest,
+  updateBoardRequest,
+  validateTokenRequest,
+} from "@/lib/api";
 import { initialData } from "@/lib/kanban";
 
 const mockFetch = vi.fn();
@@ -73,5 +79,55 @@ describe("api client", () => {
       },
       body: JSON.stringify({ board: updatedBoard }),
     });
+  });
+
+  it("sends ai chat payload and returns response", async () => {
+    const updatedBoard = {
+      ...initialData,
+      columns: initialData.columns.map((column, index) =>
+        index === 0 ? { ...column, title: "Now" } : column
+      ),
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        assistant_message: "Updated the board.",
+        board_update: updatedBoard,
+      }),
+    });
+
+    const result = await aiChatRequest("token-xyz", "Rename backlog", [
+      { role: "user", content: "What is next?" },
+      { role: "assistant", content: "Focus on backlog." },
+    ]);
+
+    expect(result.assistant_message).toBe("Updated the board.");
+    expect(result.board_update?.columns[0].title).toBe("Now");
+    expect(mockFetch).toHaveBeenCalledWith("/api/ai/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer token-xyz",
+      },
+      body: JSON.stringify({
+        message: "Rename backlog",
+        conversation_history: [
+          { role: "user", content: "What is next?" },
+          { role: "assistant", content: "Focus on backlog." },
+        ],
+      }),
+    });
+  });
+
+  it("surfaces ai chat error detail from backend", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ detail: "AI model returned invalid structured output" }),
+    });
+
+    await expect(aiChatRequest("token-xyz", "Rename backlog", [])).rejects.toThrow(
+      "AI model returned invalid structured output"
+    );
   });
 });
