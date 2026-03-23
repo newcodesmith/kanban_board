@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls /Users/michaelsmith/Documents/Learning/pm/frontend/vitest.config*)",
+      "Bash(nvm --version)",
+      "Bash(nvm ls:*)",
+      "Bash(source ~/.nvm/nvm.sh)",
+      "Bash(nvm use:*)",
+      "Bash(DATABASE_PATH=/tmp/pm_test.db ~/.local/bin/uv run pytest -v)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(BACKEND_API_ORIGIN=http://127.0.0.1:8000 npm run test:e2e)",
+      "Bash(BACKEND_API_ORIGIN=http://127.0.0.1:8000 npx playwright test --grep \"applies ai chat\")",
+      "Bash(pkill -f \"uvicorn app.main:app\")"
+    ]
+  }
+}

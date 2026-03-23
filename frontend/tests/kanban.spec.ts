@@ -23,11 +23,12 @@ test("loads the kanban board after login", async ({ page }) => {
 test("adds a card to a column", async ({ page }) => {
   await login(page);
   const firstColumn = page.locator('[data-testid^="column-"]').first();
+  const cardTitle = `Playwright card ${Date.now()}`;
   await firstColumn.getByRole("button", { name: /add a card/i }).click();
-  await firstColumn.getByPlaceholder("Card title").fill("Playwright card");
+  await firstColumn.getByPlaceholder("Card title").fill(cardTitle);
   await firstColumn.getByPlaceholder("Details").fill("Added via e2e.");
   await firstColumn.getByRole("button", { name: /add card/i }).click();
-  await expect(firstColumn.getByText("Playwright card")).toBeVisible();
+  await expect(firstColumn.getByText(cardTitle)).toBeVisible();
 });
 
 test("persists board changes across refresh", async ({ page }) => {
@@ -76,6 +77,8 @@ test("applies ai chat board update in the UI", async ({ page }) => {
   if (!token) {
     throw new Error("Missing auth token after login.");
   }
+
+  await page.getByRole("button", { name: /^ai chat$/i }).click();
 
   await page.route("**/api/ai/chat", async (route) => {
     const boardResponse = await page.request.get("/api/board", {
