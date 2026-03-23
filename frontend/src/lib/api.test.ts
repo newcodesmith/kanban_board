@@ -34,11 +34,13 @@ describe("api client", () => {
     });
   });
 
-  it("returns null for invalid token validation", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false });
+  it("throws for invalid token validation", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ detail: "Invalid or expired token" }),
+    });
 
-    const result = await validateTokenRequest("bad-token");
-    expect(result).toBeNull();
+    await expect(validateTokenRequest("bad-token")).rejects.toThrow("Invalid or expired token");
   });
 
   it("loads board with bearer token", async () => {

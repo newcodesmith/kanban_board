@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from contextlib import asynccontextmanager
 import json
+import logging
 import os
 from pathlib import Path
 import secrets
@@ -21,24 +22,28 @@ from app.ai_client import (
 )
 from app.board_store import get_board_for_username, initialize_database, save_board_for_username
 
+_log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     initialize_database(_database_path(), default_username=AUTH_USERNAME)
+    if not os.getenv("OPENROUTER_API_KEY"):
+        _log.warning("OPENROUTER_API_KEY is not set; AI endpoints will fail at runtime")
     yield
 
 
 app = FastAPI(title="Project Management MVP Backend", lifespan=lifespan)
 FRONTEND_DIST_DIR = Path("/app/frontend_dist")
 DEFAULT_DB_PATH = Path("/app/backend/data/app.db")
-AUTH_USERNAME = "user"
-AUTH_PASSWORD = "password"
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "user")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "password")
 TOKEN_TTL_HOURS = 8
 
 auth_scheme = HTTPBearer(auto_error=False)
 issued_tokens: dict[str, tuple[datetime, str]] = {}
 MAX_CHAT_HISTORY_MESSAGES = 8
-AI_CHAT_MAX_TOKENS = 300
+AI_CHAT_MAX_TOKENS = 1500
 AI_CHAT_RESPONSE_FORMAT = {"type": "json_object"}
 RETRYABLE_AI_CHAT_ERRORS = {
     "AI model returned invalid structured output",
@@ -289,6 +294,14 @@ async def validate_token(
     return {"status": "ok", "token": token, "username": username}
 
 
+@app.delete("/api/auth/token", status_code=204)
+async def logout(
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> None:
+    token, _ = auth
+    issued_tokens.pop(token, None)
+
+
 @app.get("/api/board", response_model=BoardResponse)
 async def get_board(
     auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
@@ -383,8 +396,6 @@ async def ai_chat(
             if should_retry:
                 continue
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    raise HTTPException(status_code=502, detail="AI model returned invalid structured output")
 
 
 @app.get("/health")

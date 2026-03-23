@@ -56,3 +56,25 @@ def test_validate_token_accepts_valid_token() -> None:
 
         assert validate_response.status_code == 200
         assert validate_response.json()["status"] == "ok"
+
+
+def test_logout_invalidates_token() -> None:
+    issued_tokens.clear()
+    with TestClient(app) as client:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"username": "user", "password": "password"},
+        )
+        token = login_response.json()["access_token"]
+
+        logout_response = client.delete(
+            "/api/auth/token",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert logout_response.status_code == 204
+
+        validate_response = client.get(
+            "/api/auth/validate",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert validate_response.status_code == 401

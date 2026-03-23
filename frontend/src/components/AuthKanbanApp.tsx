@@ -7,6 +7,7 @@ import {
   type AIChatMessage,
   getBoardRequest,
   loginRequest,
+  logoutRequest,
   updateBoardRequest,
   validateTokenRequest,
 } from "@/lib/api";
@@ -32,6 +33,13 @@ export const AuthKanbanApp = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const saveQueueRef = useRef(Promise.resolve());
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -43,13 +51,9 @@ export const AuthKanbanApp = () => {
       }
 
       try {
-        const tokenPayload = await validateTokenRequest(storedToken);
-        if (tokenPayload) {
-          setAuthToken(storedToken);
-          setIsAuthenticated(true);
-        } else {
-          window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-        }
+        await validateTokenRequest(storedToken);
+        setAuthToken(storedToken);
+        setIsAuthenticated(true);
       } catch {
         window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       } finally {
@@ -108,6 +112,9 @@ export const AuthKanbanApp = () => {
   };
 
   const handleLogout = () => {
+    if (authToken) {
+      void logoutRequest(authToken);
+    }
     window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     setIsAuthenticated(false);
     setAuthToken(null);
@@ -129,14 +136,15 @@ export const AuthKanbanApp = () => {
 
     saveQueueRef.current = saveQueueRef.current
       .then(async () => {
+        if (!isMountedRef.current) return;
         setIsSavingBoard(true);
         await updateBoardRequest(authToken, nextBoard);
       })
       .catch(() => {
-        setBoardErrorMessage("Unable to save board changes.");
+        if (isMountedRef.current) setBoardErrorMessage("Unable to save board changes.");
       })
       .finally(() => {
-        setIsSavingBoard(false);
+        if (isMountedRef.current) setIsSavingBoard(false);
       });
   };
 

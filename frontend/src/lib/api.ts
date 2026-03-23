@@ -48,15 +48,16 @@ export const validateTokenRequest = async (token: string) => {
     },
   });
 
-  if (!response.ok) {
-    return null;
-  }
+  return getJson<{ status: string; token: string; username: string }>(response);
+};
 
-  return (await response.json()) as {
-    status: string;
-    token: string;
-    username: string;
-  };
+export const logoutRequest = async (token: string) => {
+  await fetch("/api/auth/token", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 };
 
 export const getBoardRequest = async (token: string) => {

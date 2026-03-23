@@ -137,7 +137,10 @@ def get_board_for_username(db_path: Path, username: str) -> dict[str, Any] | Non
         if row is None:
             return None
 
-        return json.loads(row["board_json"])
+        try:
+            return json.loads(row["board_json"])
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Corrupted board data for user: {username}") from exc
 
 
 def save_board_for_username(db_path: Path, username: str, board: dict[str, Any]) -> bool:
