@@ -5,9 +5,15 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   test: {
-    environment: "jsdom",
+    environment: "happy-dom",
     setupFiles: ["./src/test/setup.ts"],
     globals: true,
+    pool: "vmForks",
+    poolOptions: {
+      vmForks: {
+        execArgv: ["--experimental-vm-modules"],
+      },
+    },
     coverage: {
       reporter: ["text", "html"],
     },

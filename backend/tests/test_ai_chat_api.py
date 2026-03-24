@@ -44,7 +44,7 @@ def test_ai_chat_returns_message_without_board_update(
         response_format: dict[str, object] | None = None,
     ) -> str:
         captured_messages.extend(messages)
-        assert max_tokens == 300
+        assert max_tokens == 15000
         assert response_format == {"type": "json_object"}
         return json.dumps(
             {
@@ -103,7 +103,7 @@ def test_ai_chat_returns_optional_board_update(
         max_tokens: int | None = None,
         response_format: dict[str, object] | None = None,
     ) -> str:
-        assert max_tokens == 300
+        assert max_tokens == 15000
         assert response_format == {"type": "json_object"}
         return json.dumps(
             {
@@ -209,7 +209,7 @@ def test_ai_chat_trims_conversation_history_to_recent_messages(
         response_format: dict[str, object] | None = None,
     ) -> str:
         captured_messages.extend(messages)
-        assert max_tokens == 300
+        assert max_tokens == 15000
         assert response_format == {"type": "json_object"}
         return json.dumps(
             {

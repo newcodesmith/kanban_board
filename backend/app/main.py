@@ -20,14 +20,35 @@ from app.ai_client import (
     run_chat_messages,
     run_connectivity_prompt,
 )
-from app.board_store import get_board_for_username, initialize_database, save_board_for_username
+from app.board_store import (
+    authenticate_user,
+    create_board_for_user,
+    delete_board,
+    delete_user_by_username,
+    get_board_by_id,
+    get_board_for_username,
+    get_user_by_username,
+    initialize_database,
+    list_boards_for_user,
+    list_users,
+    register_user,
+    rename_board,
+    save_board_by_id,
+    save_board_for_username,
+    set_user_active,
+    update_user_password,
+)
 
 _log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    initialize_database(_database_path(), default_username=AUTH_USERNAME)
+    initialize_database(
+        _database_path(),
+        default_username=AUTH_USERNAME,
+        default_password=AUTH_PASSWORD,
+    )
     if not os.getenv("OPENROUTER_API_KEY"):
         _log.warning("OPENROUTER_API_KEY is not set; AI endpoints will fail at runtime")
     yield
@@ -39,6 +60,7 @@ DEFAULT_DB_PATH = Path("/app/backend/data/app.db")
 AUTH_USERNAME = os.getenv("AUTH_USERNAME", "user")
 AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "password")
 TOKEN_TTL_HOURS = 8
+REGISTRATION_ENABLED = os.getenv("REGISTRATION_ENABLED", "true").lower() == "true"
 
 auth_scheme = HTTPBearer(auto_error=False)
 issued_tokens: dict[str, tuple[datetime, str]] = {}
@@ -68,6 +90,8 @@ Do not include markdown, code fences, or extra keys.
 """
 
 
+# ── Request / Response models ──────────────────────────────────────────────────
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -76,6 +100,30 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "Bearer"
+    username: str
+    role: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+class RegisterResponse(BaseModel):
+    username: str
+    role: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: str
+
+
+class ChangePasswordRequest(BaseModel):
+    new_password: str
 
 
 class CardModel(BaseModel):
@@ -103,6 +151,27 @@ class BoardUpdateRequest(BaseModel):
     board: BoardModel
 
 
+class BoardMeta(BaseModel):
+    id: int
+    name: str
+    created_at: str
+    updated_at: str
+
+
+class BoardWithMeta(BaseModel):
+    id: int
+    name: str
+    board: BoardModel
+
+
+class CreateBoardRequest(BaseModel):
+    name: str
+
+
+class RenameBoardRequest(BaseModel):
+    name: str
+
+
 class AIConnectivityRequest(BaseModel):
     prompt: str
 
@@ -120,6 +189,7 @@ class AIChatHistoryMessage(BaseModel):
 class AIChatRequest(BaseModel):
     message: str
     conversation_history: list[AIChatHistoryMessage] = Field(default_factory=list)
+    board_id: int | None = None
 
 
 class AIModelOutput(BaseModel):
@@ -131,6 +201,8 @@ class AIChatResponse(BaseModel):
     assistant_message: str
     board_update: BoardModel | None = None
 
+
+# ── Auth helpers ───────────────────────────────────────────────────────────────
 
 def _database_path() -> Path:
     configured_path = os.getenv("DATABASE_PATH")
@@ -186,6 +258,19 @@ def _require_bearer_token(
 
     return token, username
 
+
+def _require_admin(
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> tuple[str, str]:
+    """Require the current user to have admin role."""
+    token, username = auth
+    user = get_user_by_username(_database_path(), username)
+    if user is None or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return token, username
+
+
+# ── AI helpers ─────────────────────────────────────────────────────────────────
 
 def _build_ai_chat_messages(
     board: dict[str, Any],
@@ -278,12 +363,37 @@ def _parse_ai_chat_output(raw_output: str) -> AIChatResponse:
     )
 
 
+# ── Auth endpoints ─────────────────────────────────────────────────────────────
+
 @app.post("/api/auth/login", response_model=LoginResponse)
 async def login(payload: LoginRequest) -> LoginResponse:
-    if payload.username != AUTH_USERNAME or payload.password != AUTH_PASSWORD:
+    user = authenticate_user(_database_path(), payload.username, payload.password)
+    if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return LoginResponse(access_token=_issue_token(payload.username))
+    return LoginResponse(
+        access_token=_issue_token(payload.username),
+        username=payload.username,
+        role=user["role"],
+    )
+
+
+@app.post("/api/auth/register", response_model=RegisterResponse, status_code=201)
+async def register(payload: RegisterRequest) -> RegisterResponse:
+    if not REGISTRATION_ENABLED:
+        raise HTTPException(status_code=403, detail="Registration is disabled")
+
+    username = payload.username.strip()
+    if not username or len(username) < 3:
+        raise HTTPException(status_code=422, detail="Username must be at least 3 characters")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+
+    user = register_user(_database_path(), username, payload.password, role="user")
+    if user is None:
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    return RegisterResponse(username=user["username"], role=user["role"])
 
 
 @app.get("/api/auth/validate")
@@ -291,7 +401,9 @@ async def validate_token(
     auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
 ) -> dict[str, str]:
     token, username = auth
-    return {"status": "ok", "token": token, "username": username}
+    user = get_user_by_username(_database_path(), username)
+    role = user["role"] if user else "user"
+    return {"status": "ok", "token": token, "username": username, "role": role}
 
 
 @app.delete("/api/auth/token", status_code=204)
@@ -301,6 +413,185 @@ async def logout(
     token, _ = auth
     issued_tokens.pop(token, None)
 
+
+# ── User management endpoints (admin) ─────────────────────────────────────────
+
+@app.get("/api/users", response_model=list[UserResponse])
+async def get_users(
+    _auth: Annotated[tuple[str, str], Depends(_require_admin)],
+) -> list[UserResponse]:
+    users = list_users(_database_path())
+    return [UserResponse(**u) for u in users]
+
+
+@app.delete("/api/users/{username}", status_code=204)
+async def delete_user(
+    username: str,
+    auth: Annotated[tuple[str, str], Depends(_require_admin)],
+) -> None:
+    _, admin_username = auth
+    if username == admin_username:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    deleted = delete_user_by_username(_database_path(), username)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+@app.patch("/api/users/{username}/active", status_code=200)
+async def toggle_user_active(
+    username: str,
+    is_active: bool,
+    auth: Annotated[tuple[str, str], Depends(_require_admin)],
+) -> dict[str, Any]:
+    _, admin_username = auth
+    if username == admin_username:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+    updated = set_user_active(_database_path(), username, is_active)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"username": username, "is_active": is_active}
+
+
+@app.post("/api/users/{username}/password", status_code=204)
+async def change_password(
+    username: str,
+    payload: ChangePasswordRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> None:
+    _, requesting_username = auth
+    # Users can change their own password; admins can change any
+    if requesting_username != username:
+        user = get_user_by_username(_database_path(), requesting_username)
+        if user is None or user.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=422, detail="Password must be at least 6 characters")
+
+    updated = update_user_password(_database_path(), username, payload.new_password)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+
+
+# ── Multi-board endpoints ──────────────────────────────────────────────────────
+
+@app.get("/api/boards", response_model=list[BoardMeta])
+async def get_boards(
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> list[BoardMeta]:
+    _, username = auth
+    boards = list_boards_for_user(_database_path(), username)
+    return [BoardMeta(**b) for b in boards]
+
+
+@app.post("/api/boards", response_model=BoardWithMeta, status_code=201)
+async def create_board(
+    payload: CreateBoardRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardWithMeta:
+    _, username = auth
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Board name is required")
+
+    result = create_board_for_user(_database_path(), username, name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Return the newly created board with default data
+    from app.board_store import DEFAULT_BOARD
+    return BoardWithMeta(
+        id=result["id"],
+        name=result["name"],
+        board=BoardModel.model_validate(DEFAULT_BOARD),
+    )
+
+
+@app.get("/api/boards/{board_id}", response_model=BoardWithMeta)
+async def get_board_by_id_endpoint(
+    board_id: int,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardWithMeta:
+    _, username = auth
+    result = get_board_by_id(_database_path(), board_id, username)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return BoardWithMeta(
+        id=result["id"],
+        name=result["name"],
+        board=BoardModel.model_validate(result["board"]),
+    )
+
+
+@app.put("/api/boards/{board_id}", response_model=BoardWithMeta)
+async def update_board_by_id(
+    board_id: int,
+    payload: BoardUpdateRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardWithMeta:
+    _, username = auth
+    saved = save_board_by_id(
+        _database_path(),
+        board_id,
+        username,
+        payload.board.model_dump(mode="json"),
+    )
+    if not saved:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    # Re-fetch to get current name
+    result = get_board_by_id(_database_path(), board_id, username)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return BoardWithMeta(
+        id=result["id"],
+        name=result["name"],
+        board=payload.board,
+    )
+
+
+@app.patch("/api/boards/{board_id}", response_model=BoardMeta)
+async def rename_board_endpoint(
+    board_id: int,
+    payload: RenameBoardRequest,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> BoardMeta:
+    _, username = auth
+    new_name = payload.name.strip()
+    if not new_name:
+        raise HTTPException(status_code=422, detail="Board name is required")
+
+    renamed = rename_board(_database_path(), board_id, username, new_name)
+    if not renamed:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    boards = list_boards_for_user(_database_path(), username)
+    updated = next((b for b in boards if b["id"] == board_id), None)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return BoardMeta(**updated)
+
+
+@app.delete("/api/boards/{board_id}", status_code=204)
+async def delete_board_endpoint(
+    board_id: int,
+    auth: Annotated[tuple[str, str], Depends(_require_bearer_token)],
+) -> None:
+    _, username = auth
+    # Ensure user has at least one board remaining
+    boards = list_boards_for_user(_database_path(), username)
+    if len(boards) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete your last board")
+
+    deleted = delete_board(_database_path(), board_id, username)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+
+# ── Legacy board endpoints (backward compat) ───────────────────────────────────
 
 @app.get("/api/board", response_model=BoardResponse)
 async def get_board(
@@ -330,6 +621,8 @@ async def update_board(
 
     return BoardResponse(board=payload.board)
 
+
+# ── Misc / AI endpoints ────────────────────────────────────────────────────────
 
 @app.get("/api/hello")
 async def api_hello() -> dict[str, str]:
@@ -363,9 +656,16 @@ async def ai_chat(
     if not message:
         raise HTTPException(status_code=422, detail="Message is required")
 
-    board = get_board_for_username(_database_path(), username)
-    if board is None:
-        raise HTTPException(status_code=404, detail="Board not found")
+    # Support board_id for multi-board AI chat
+    if payload.board_id is not None:
+        board_result = get_board_by_id(_database_path(), payload.board_id, username)
+        if board_result is None:
+            raise HTTPException(status_code=404, detail="Board not found")
+        board = board_result["board"]
+    else:
+        board = get_board_for_username(_database_path(), username)
+        if board is None:
+            raise HTTPException(status_code=404, detail="Board not found")
 
     ai_messages = _build_ai_chat_messages(
         board=board,
