@@ -1,0 +1,34 @@
+What are the technologies used to build this project?                                                                                                             
+                                                                                                                                                                    
+⏺ Based on the codebase:                                                                                                                                            
+                                                            
+  Frontend                                                                                                                                                          
+   
+  - Next.js 16 (React 19) — static export mode                                                                                                                      
+  - TypeScript                                              
+  - Tailwind CSS — styling                                                                                                                                          
+  - @dnd-kit — drag-and-drop                                
+  - Vitest — unit tests                                                                                                                                             
+  - Playwright — E2E tests                                                                                                                                          
+                                                                                                                                                                    
+  Backend                                                                                                                                                           
+                                                            
+  - Python / FastAPI — REST API
+  - SQLite — database (via Python's built-in sqlite3)
+  - uv — Python package manager                                                                                                                                     
+  - pytest — tests
+                                                                                                                                                                    
+  AI                                                        
+                                                                                                                                                                    
+  - OpenRouter API — routes to openai/gpt-oss-120b for the AI chat feature                                                                                          
+   
+  Infrastructure                                                                                                                                                    
+                                                            
+  - Docker — single container (multi-stage build: Node builds the frontend, Python serves everything)                                                               
+  - Docker Compose — both prod and dev configurations
+                                                                                                                                                                    
+  Fonts & Design                                                                                                                                                    
+   
+  - Space Grotesk — headings                                                                                                                                        
+  - Manrope — body text                                     
+  - Custom design tokens (navy, yellow, blue, purple)
