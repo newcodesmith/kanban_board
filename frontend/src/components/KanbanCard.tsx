@@ -61,6 +61,34 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
       {...listeners}
       data-testid={`card-${card.id}`}
     >
+      {/* Action buttons row — visible on hover */}
+      <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 -mt-1 mb-1.5 h-6">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(card);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--gray-text)] transition hover:bg-blue-50 hover:text-[var(--primary-blue)]"
+          aria-label={`Edit ${card.title}`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(card.id);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--gray-text)] transition hover:bg-red-50 hover:text-red-500"
+          aria-label={`Delete ${card.title}`}
+        >
+          <TrashIcon />
+        </button>
+      </div>
+
       <div className="flex items-start gap-2">
         {card.priority ? (
           <span
@@ -68,7 +96,7 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
             title={`Priority: ${card.priority}`}
           />
         ) : null}
-        <h4 className="min-w-0 flex-1 break-normal pr-5 font-display text-base font-semibold text-[var(--navy-dark)]">
+        <h4 className="min-w-0 flex-1 break-normal font-display text-base font-semibold text-[var(--navy-dark)]">
           {card.title}
         </h4>
       </div>
@@ -121,33 +149,6 @@ export const KanbanCard = ({ card, onDelete, onEdit }: KanbanCardProps) => {
         </span>
       ) : null}
 
-      {/* Action buttons */}
-      <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(card);
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--gray-text)] transition hover:bg-blue-50 hover:text-[var(--primary-blue)]"
-          aria-label={`Edit ${card.title}`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(card.id);
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--gray-text)] transition hover:bg-red-50 hover:text-red-500"
-          aria-label={`Delete ${card.title}`}
-        >
-          <TrashIcon />
-        </button>
-      </div>
     </article>
   );
 };

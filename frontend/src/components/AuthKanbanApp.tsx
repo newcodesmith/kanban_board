@@ -209,6 +209,7 @@ export const AuthKanbanApp = () => {
     setPassword("");
     setConfirmPassword("");
     setErrorMessage("");
+    setIsRegistering(false);
     setCurrentUsername("");
     setCurrentRole("");
   };

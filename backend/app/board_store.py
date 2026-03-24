@@ -63,6 +63,17 @@ DEFAULT_BOARD: dict[str, Any] = {
     },
 }
 
+BLANK_BOARD: dict[str, Any] = {
+    "columns": [
+        {"id": "col-backlog", "title": "Backlog", "cardIds": []},
+        {"id": "col-discovery", "title": "Discovery", "cardIds": []},
+        {"id": "col-progress", "title": "In Progress", "cardIds": []},
+        {"id": "col-review", "title": "Review", "cardIds": []},
+        {"id": "col-done", "title": "Done", "cardIds": []},
+    ],
+    "cards": {},
+}
+
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
     """Returns (hash_hex, salt) using PBKDF2-HMAC-SHA256."""
@@ -313,7 +324,7 @@ def create_board_for_user(
 ) -> dict[str, Any] | None:
     """Create a new board for a user. Returns board meta or None if user not found."""
     if board_data is None:
-        board_data = DEFAULT_BOARD
+        board_data = BLANK_BOARD
     with _connect(db_path) as connection:
         user_row = connection.execute(
             "SELECT id FROM users WHERE username = ?", (username,)
