@@ -319,15 +319,17 @@ export const AuthKanbanApp = () => {
         <button
           type="button"
           onClick={() => setIsChatOpen((current) => !current)}
-          className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
+          className="flex items-center gap-1.5 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           {isChatOpen ? "Close AI Chat" : "AI Chat"}
         </button>
         <button
           type="button"
           onClick={handleLogout}
-          className="rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
+          className="flex items-center gap-1.5 rounded-full border border-[var(--stroke)] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
         >
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Log out
         </button>
       </div>
@@ -336,74 +338,90 @@ export const AuthKanbanApp = () => {
           {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
         </div>
       </div>
+
       {isChatOpen ? (
         <button
           type="button"
           aria-label="Close chat panel"
           onClick={() => setIsChatOpen(false)}
-          className="fixed inset-0 z-40 bg-[var(--navy-dark)]/30"
+          className="fixed inset-0 z-40 bg-[var(--navy-dark)]/20"
         />
       ) : null}
+
       <aside
-        className={`fixed right-0 top-0 z-50 flex h-screen w-full max-w-[380px] flex-col border-l border-[var(--stroke)] bg-white p-4 shadow-[var(--shadow)] transition-transform duration-200 ${
+        className={`fixed right-0 top-0 z-50 flex h-screen w-full max-w-[360px] flex-col border-l border-[var(--stroke)] bg-white shadow-[var(--shadow)] transition-transform duration-200 ${
           isChatOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-              AI Chat
-            </p>
-            <h2 className="mt-2 font-display text-xl font-semibold text-[var(--navy-dark)]">
-              Board Assistant
-            </h2>
+        <div className="flex h-12 items-center justify-between border-b border-[var(--stroke)] px-4">
+          <div className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--secondary-purple)]" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h2 className="font-display text-sm font-semibold text-[var(--navy-dark)]">Board Assistant</h2>
           </div>
           <button
             type="button"
             onClick={() => setIsChatOpen(false)}
-            className="rounded-full border border-[var(--stroke)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--navy-dark)] transition hover:border-[var(--primary-blue)]"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-[var(--stroke)] text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
+            aria-label="Close chat"
           >
-            Close
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
-        <div className="mt-4 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3">
+        <div className="flex-1 space-y-2 overflow-y-auto p-3">
           {chatMessages.length === 0 ? (
-            <p className="text-sm text-[var(--gray-text)]">Ask for planning help or board updates.</p>
+            <p className="p-2 text-sm text-[var(--gray-text)]">Ask for planning help or board updates.</p>
           ) : null}
           {chatMessages.map((chatMessage, index) => (
             <div
               key={`${chatMessage.role}-${index}`}
-              className="rounded-xl border border-[var(--stroke)] bg-white px-3 py-2"
+              className={`rounded-xl px-3 py-2 text-sm ${
+                chatMessage.role === "user"
+                  ? "ml-6 bg-[var(--navy-dark)] text-white"
+                  : "mr-6 border border-[var(--stroke)] bg-[var(--surface)] text-[var(--navy-dark)]"
+              }`}
             >
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
-                {chatMessage.role}
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] opacity-60 mb-0.5">
+                {chatMessage.role === "user" ? "You" : "Assistant"}
               </p>
-              <p className="mt-1 text-sm text-[var(--navy-dark)]">{chatMessage.content}</p>
+              <p>{chatMessage.content}</p>
             </div>
           ))}
         </div>
 
-        <form className="mt-3 space-y-2" onSubmit={handleChatSubmit}>
-          <label htmlFor="ai-chat-input" className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--gray-text)]">
-            Message
-          </label>
+        <form className="border-t border-[var(--stroke)] p-3 space-y-2" onSubmit={handleChatSubmit}>
           <textarea
             id="ai-chat-input"
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
-            placeholder="Ask AI to update cards or give guidance"
-            className="h-24 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder="Ask AI to update cards or give guidance…"
+            className="h-20 w-full resize-none rounded-xl border border-[var(--stroke)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
           />
           {chatErrorMessage ? (
             <p className="text-xs font-semibold text-[var(--secondary-purple)]">{chatErrorMessage}</p>
           ) : null}
           <button
             type="submit"
-            className="w-full rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:brightness-110 disabled:opacity-70"
+            className="flex w-full items-center justify-center gap-1.5 rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:brightness-110 disabled:opacity-70"
             disabled={isSendingChat}
           >
-            {isSendingChat ? "Sending..." : "Send"}
+            {isSendingChat ? (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                Sending
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send
+              </>
+            )}
           </button>
         </form>
       </aside>

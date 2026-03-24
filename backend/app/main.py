@@ -43,7 +43,7 @@ TOKEN_TTL_HOURS = 8
 auth_scheme = HTTPBearer(auto_error=False)
 issued_tokens: dict[str, tuple[datetime, str]] = {}
 MAX_CHAT_HISTORY_MESSAGES = 8
-AI_CHAT_MAX_TOKENS = 1500
+AI_CHAT_MAX_TOKENS = 15000
 AI_CHAT_RESPONSE_FORMAT = {"type": "json_object"}
 RETRYABLE_AI_CHAT_ERRORS = {
     "AI model returned invalid structured output",
