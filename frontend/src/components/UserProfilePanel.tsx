@@ -66,7 +66,6 @@ export const UserProfilePanel = ({ token, username, role, onClose }: Props) => {
     try {
       await changePasswordRequest(token, username, newPassword);
       setPwSuccess("Password changed successfully.");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (error) {

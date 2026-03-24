@@ -26,7 +26,8 @@
       "Bash(git stash:*)",
       "Bash(npm install:*)",
       "Bash(find /Users/michaelsmith/Documents/Learning/pm/frontend -name *.test.* -o -name *.spec.*)",
-      "Bash(find /Users/michaelsmith/Documents/Learning/pm -path */node_modules -prune -o -name *.test.* -type f -print)"
+      "Bash(find /Users/michaelsmith/Documents/Learning/pm -path */node_modules -prune -o -name *.test.* -type f -print)",
+      "Bash(docker compose:*)"
     ]
   }
 }
