@@ -1,123 +1,129 @@
-# Code review
+# Code Review: Project Management MVP
 
-## Overall assessment
+## Overview
 
-The codebase is well-structured and follows the MVP philosophy throughout. Test coverage is solid across unit, integration, and E2E layers. The main concerns are a security issue with hardcoded credentials, a race condition in board saves, and a handful of error-handling gaps.
-
----
-
-## High priority
-
-### 1. Hardcoded credentials — `backend/app/main.py:34-35`
-
-```python
-AUTH_USERNAME = "user"
-AUTH_PASSWORD = "password"
-```
-
-Credentials are hardcoded in source. Load from environment variables instead:
-
-```python
-AUTH_USERNAME = os.getenv("AUTH_USERNAME", "user")
-AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "password")
-```
-
-For a production deployment, remove the defaults and fail fast at startup if the variable is absent.
+Next.js + FastAPI Kanban application with SQLite persistence, token-based auth, and AI chat via OpenRouter. Architecture is straightforward and well-organized for an MVP.
 
 ---
 
-### 2. Unreachable raise after AI chat retry loop — `backend/app/main.py`
+## Backend Review (`backend/`)
 
-The `raise HTTPException` after the retry loop is dead code — the loop always returns or raises before reaching it. Remove it.
+### Strengths
+- Clean REST API structure (`/api/auth/*`, `/api/board`, `/api/ai/*`)
+- Proper separation: `board_store.py` handles DB, `ai_client.py` handles AI
+- Token management with expiry cleanup is appropriate for MVP
+- Custom error handling with typed `AIClientError`
+- Pydantic validation on all request/response models
+- Auto-creating DB on startup
 
----
+### Issues & Recommendations
 
-### 3. Race condition in board save queue — `frontend/src/components/AuthKanbanApp.tsx`
+**1. Security - Token storage is in-memory** (`main.py:44`)
+- Tokens lost on restart, forcing re-login
+- Recommendation: Document as known MVP limitation, consider Redis for production
 
-`enqueueBoardSave` chains promises but does not cancel on component unmount. If the component unmounts during a save (e.g. on logout), state updates continue on the dead component. Add a cancel/abort mechanism, or at minimum guard state updates with an `isMounted` ref.
+**2. Security - Hardcoded fallback credentials** (`main.py:39-40`)
+- Defaults to `user/password` if env vars not set
+- Recommendation: Fail fast if env vars missing in production
 
----
+**3. Missing rate limiting** (`main.py`)
+- No rate limiting on auth or AI endpoints
+- Recommendation: Add before production
 
-## Medium priority
+**4. SQLite connection handling** (`board_store.py:64-68`)
+- Creates new connection per operation - not thread-safe
+- Recommendation: Use connection pooling
 
-### 4. No JSON decode guard in board store — `backend/app/board_store.py:140`
-
-`json.loads(row["board_json"])` will raise an unhandled exception if the stored JSON is corrupted. Wrap in a try/except and raise a clear error:
-
-```python
-try:
-    return json.loads(row["board_json"])
-except json.JSONDecodeError as e:
-    raise RuntimeError(f"Corrupted board data for user {username}") from e
-```
-
----
-
-### 5. Silent failure on non-JSON error responses — `frontend/src/lib/api.ts`
-
-When an API error response is not valid JSON, `detailMessage` silently becomes an empty string and the user sees a generic error with no useful information. Fall back to the HTTP status instead:
-
-```typescript
-detailMessage = `Request failed with status ${response.status}`;
-```
+**5. No XSS protection** on AI-injected content
+- Board content rendered without sanitization
+- Recommendation: Add sanitization if content ever rendered as HTML
 
 ---
 
-### 6. `validateTokenRequest` returns null on error — `frontend/src/lib/api.ts`
+## Frontend Review (`frontend/`)
 
-All other API functions throw on error; this one returns `null`. The inconsistency makes error handling harder to reason about. Consider aligning it with the other functions.
+### Strengths
+- Clean component structure (Board > Column > Card)
+- TypeScript throughout with proper types
+- Good state management with useState/useEffect/useRef
+- Proper dnd-kit integration
+- Design tokens in CSS variables match spec
+- Loading states, error handling, debounced save queue
 
----
+### Issues & Recommendations
 
-### 7. No token revocation on logout — `backend/app/main.py`
+**1. Unbounded save queue** (`AuthKanbanApp.tsx:35`)
+- Promise chain could grow indefinitely
+- Recommendation: Add queue size limit
 
-Tokens are only expired by TTL (8 hours). Logging out does not remove the token from `issued_tokens`. For the MVP this is an acceptable tradeoff, but the token remains valid for up to 8 hours after logout. Add a `DELETE /api/auth/token` endpoint if this matters.
+**2. Missing error boundary** (`AuthKanbanApp.tsx`)
+- No React error boundary
+- Recommendation: Add error boundary wrapper
 
----
+**3. Token validation on startup** (`AuthKanbanApp.tsx:44-65`)
+- Extra network call on every page load
+- Recommendation: Could rely on API errors instead
 
-### 8. AI API key not validated at startup — `backend/app/ai_client.py`
+**4. Chat history unbounded** (`AuthKanbanApp.tsx:28`)
+- Grows indefinitely during session
+- Recommendation: Trim old messages (backend sends 8, frontend keeps all)
 
-`_api_key()` raises only when the AI endpoint is first called. If the key is missing, the app starts and appears healthy. Call `_api_key()` in the lifespan startup block alongside DB initialisation so the problem is surfaced immediately.
+**5. Missing accessibility**
+- No ARIA live regions for dynamic updates
+- Keyboard navigation could be improved
 
----
-
-## Low priority
-
-### 9. Duplicated user lookup SQL — `backend/app/board_store.py`
-
-The user-by-username SELECT appears in two functions. Extract to a `_get_user_id(db, username)` helper.
-
----
-
-### 10. Repeated Bearer token header — `frontend/src/lib/api.ts`
-
-The `Authorization: Bearer ...` header is constructed in four places. Extract to a one-line helper `authHeader(token)` to reduce repetition.
-
----
-
-### 11. `AuthKanbanApp` is large (400+ lines) — `frontend/src/components/AuthKanbanApp.tsx`
-
-The component handles auth, board management, and chat. Acceptable for the current scope, but worth splitting into a `ChatPanel` component if the chat grows.
-
----
-
-### 12. `moveCard` has no test for invalid IDs — `frontend/src/lib/kanban.test.ts`
-
-Edge cases for unknown `activeId` or `overId` are untested. Low risk (these values come from dnd-kit events), but worth one defensive test case.
+**6. No optimistic UI for card operations**
+- Adding/deleting waits for API response
 
 ---
 
-### 13. Logout does not verify chat state is cleared — `frontend/src/components/AuthKanbanApp.test.tsx`
+## Testing Review
 
-The logout test only checks that the login form reappears. Add an assertion that chat messages are cleared after logout.
+**Backend tests exist for:**
+- Auth endpoints
+- Board CRUD
+- AI client
+- Chat endpoint
+- DB operations
+
+**Frontend tests exist for:**
+- Unit tests for components
+- API client tests
+- E2E tests with Playwright
+
+**Observations:**
+- Good test organization by feature
+- Missing: Edge cases like malformed board JSON, concurrent writes
 
 ---
 
-## Test environment notes (not code issues)
+## Docker & Infrastructure
 
-Two E2E test bugs were found and fixed during the test run:
+- Multi-stage Dockerfile appropriate
+- Using `npm ci` (good)
+- Missing: Container health check
 
-- **Chat test missing panel open step** (`tests/kanban.spec.ts:73`): the test interacted with the chat sidebar without first clicking "AI Chat" to open it. Fixed by adding the click.
-- **"Adds a card" test not isolated** (`tests/kanban.spec.ts:23`): hardcoded card title accumulated duplicates across runs. Fixed by using `Date.now()` for uniqueness, matching the adjacent persistence test.
+---
 
-The test suite also requires **Node 25** (or Node 22+) on the host due to `jsdom 27` + `parse5` ESM compatibility. The Docker dev image already uses Node 22, so this only affects running tests outside Docker. Running `nvm use 25` before the test commands resolves it.
+## Summary
+
+**High Priority:**
+1. Add environment validation (fail if AUTH credentials not set)
+2. Add rate limiting to API endpoints
+3. Add React error boundary
+4. Add request logging/tracing
+
+**Medium Priority:**
+5. Bound chat message history
+6. Add XSS protection
+7. SQLite connection pooling
+8. Add container health check
+
+**Low Priority:**
+9. Request correlation IDs
+10. Optimistic UI updates
+11. Improve keyboard accessibility
+
+---
+
+The codebase is well-structured for an MVP. Core functionality is correctly implemented. No critical security issues for MVP, but rate limiting and input validation should be added before production.
