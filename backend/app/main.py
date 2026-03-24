@@ -130,6 +130,9 @@ class CardModel(BaseModel):
     id: str
     title: str
     details: str
+    priority: str | None = None  # "low" | "medium" | "high"
+    due_date: str | None = None  # ISO date string YYYY-MM-DD
+    labels: list[str] = Field(default_factory=list)
 
 
 class ColumnModel(BaseModel):

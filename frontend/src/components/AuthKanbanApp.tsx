@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { BoardSidebar } from "@/components/BoardSidebar";
+import { UserProfilePanel } from "@/components/UserProfilePanel";
 import {
   aiChatRequest,
   type AIChatMessage,
@@ -32,6 +33,7 @@ export const AuthKanbanApp = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [boardErrorMessage, setBoardErrorMessage] = useState("");
   const [board, setBoard] = useState<BoardData | null>(null);
+  const [boardVersion, setBoardVersion] = useState(0);
   const [boards, setBoards] = useState<BoardMeta[]>([]);
   const [activeBoardId, setActiveBoardId] = useState<number | null>(null);
   const [chatInput, setChatInput] = useState("");
@@ -47,6 +49,7 @@ export const AuthKanbanApp = () => {
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const saveQueueRef = useRef(Promise.resolve());
   const isMountedRef = useRef(true);
 
@@ -192,6 +195,7 @@ export const AuthKanbanApp = () => {
     setIsAuthenticated(false);
     setAuthToken(null);
     setBoard(null);
+    setBoardVersion(0);
     setBoards([]);
     setActiveBoardId(null);
     setChatInput("");
@@ -199,6 +203,7 @@ export const AuthKanbanApp = () => {
     setChatErrorMessage("");
     setIsChatOpen(false);
     setIsBoardSidebarOpen(false);
+    setIsProfileOpen(false);
     setBoardErrorMessage("");
     setUsername("");
     setPassword("");
@@ -309,6 +314,7 @@ export const AuthKanbanApp = () => {
 
       if (response.board_update && activeBoardId !== null) {
         setBoard(response.board_update);
+        setBoardVersion((v) => v + 1);
         setBoardErrorMessage("");
         enqueueBoardSave(response.board_update, activeBoardId);
       }
@@ -534,10 +540,17 @@ export const AuthKanbanApp = () => {
 
       <div className="absolute right-6 top-6 z-30 flex items-center gap-2">
         {currentUsername ? (
-          <span className="hidden sm:block text-xs font-semibold text-[var(--gray-text)]">
+          <button
+            type="button"
+            onClick={() => setIsProfileOpen((open) => !open)}
+            className="hidden sm:flex items-center gap-2 rounded-full border border-[var(--stroke)] bg-white px-3 py-2 text-xs font-semibold text-[var(--navy-dark)] shadow-[var(--shadow)] transition hover:border-[var(--primary-blue)]"
+            aria-label="Open user profile"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--navy-dark)] text-[10px] font-bold text-white">
+              {currentUsername[0]?.toUpperCase()}
+            </span>
             {currentUsername}
-            {currentRole === "admin" ? " (admin)" : ""}
-          </span>
+          </button>
         ) : null}
         <button
           type="button"
@@ -559,9 +572,25 @@ export const AuthKanbanApp = () => {
 
       <div className="pt-20">
         <div className="min-w-0">
-          {board ? <KanbanBoard initialBoard={board} onBoardChange={handleBoardChange} /> : null}
+          {board ? (
+            <KanbanBoard
+              key={`${activeBoardId ?? "board"}-${boardVersion}`}
+              initialBoard={board}
+              boardName={activeBoard?.name}
+              onBoardChange={handleBoardChange}
+            />
+          ) : null}
         </div>
       </div>
+
+      {isProfileOpen && authToken && currentUsername ? (
+        <UserProfilePanel
+          token={authToken}
+          username={currentUsername}
+          role={currentRole}
+          onClose={() => setIsProfileOpen(false)}
+        />
+      ) : null}
 
       {isChatOpen ? (
         <button

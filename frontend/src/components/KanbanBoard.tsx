@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,22 +13,19 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { CardDetailModal } from "@/components/CardDetailModal";
+import { createId, initialData, moveCard, type BoardData, type Card } from "@/lib/kanban";
 
 type KanbanBoardProps = {
   initialBoard?: BoardData;
+  boardName?: string;
   onBoardChange?: (nextBoard: BoardData) => void;
 };
 
-export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) => {
+export const KanbanBoard = ({ initialBoard, boardName, onBoardChange }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialBoard ?? initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (initialBoard) {
-      setBoard(initialBoard);
-    }
-  }, [initialBoard]);
+  const [editingCard, setEditingCard] = useState<Card | null>(null);
 
   const updateBoard = (updater: (current: BoardData) => BoardData) => {
     setBoard((current) => {
@@ -108,6 +105,21 @@ export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) =
     });
   };
 
+  const handleSaveCard = (updated: Card) => {
+    updateBoard((prev) => ({
+      ...prev,
+      cards: {
+        ...prev.cards,
+        [updated.id]: updated,
+      },
+    }));
+  };
+
+  const totalCards = board.columns.reduce((sum, col) => sum + col.cardIds.length, 0);
+  const highPriorityCount = Object.values(board.cards).filter(
+    (c) => c.priority === "high"
+  ).length;
+
   const activeCard = activeCardId ? cardsById[activeCardId] : null;
 
   return (
@@ -115,17 +127,30 @@ export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) =
       <main className="relative mx-auto flex min-h-screen max-w-[1500px] flex-col gap-10 px-6 pb-16">
         <header className="flex items-center gap-4 rounded-[32px] border border-[var(--stroke)] bg-white/80 px-8 py-5 shadow-[var(--shadow)] backdrop-blur">
           <div className="h-2 w-10 shrink-0 rounded-full bg-[var(--accent-yellow)]" />
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--gray-text)]">
-              Single Board Kanban
+              Project Board
             </p>
-            <h1 className="mt-1 font-display text-2xl font-semibold text-[var(--navy-dark)]">
-              Kanban Studio
+            <h1 className="mt-1 font-display text-2xl font-semibold text-[var(--navy-dark)] truncate">
+              {boardName ?? "Kanban Studio"}
             </h1>
           </div>
-          <p className="ml-4 border-l border-[var(--stroke)] pl-4 text-sm leading-relaxed text-[var(--gray-text)]">
-            Rename columns, drag cards between stages,<br />and capture quick notes.
-          </p>
+          <div className="hidden sm:flex items-center gap-6 border-l border-[var(--stroke)] pl-6">
+            <div className="text-center">
+              <p className="text-xl font-bold text-[var(--navy-dark)]">{totalCards}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">Cards</p>
+            </div>
+            {highPriorityCount > 0 ? (
+              <div className="text-center">
+                <p className="text-xl font-bold text-red-500">{highPriorityCount}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-400">High Priority</p>
+              </div>
+            ) : null}
+            <div className="text-center">
+              <p className="text-xl font-bold text-[var(--navy-dark)]">{board.columns.length}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">Columns</p>
+            </div>
+          </div>
         </header>
 
         <DndContext
@@ -139,10 +164,13 @@ export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) =
               <KanbanColumn
                 key={column.id}
                 column={column}
-                cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                cards={column.cardIds
+                  .map((cardId) => board.cards[cardId])
+                  .filter(Boolean)}
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
                 onDeleteCard={handleDeleteCard}
+                onEditCard={(card) => setEditingCard(card)}
               />
             ))}
           </section>
@@ -155,6 +183,20 @@ export const KanbanBoard = ({ initialBoard, onBoardChange }: KanbanBoardProps) =
           </DragOverlay>
         </DndContext>
       </main>
+
+      {editingCard ? (
+        <CardDetailModal
+          card={editingCard}
+          onSave={handleSaveCard}
+          onDelete={() => {
+            const col = board.columns.find((c) =>
+              c.cardIds.includes(editingCard.id)
+            );
+            if (col) handleDeleteCard(col.id, editingCard.id);
+          }}
+          onClose={() => setEditingCard(null)}
+        />
+      ) : null}
     </div>
   );
 };
