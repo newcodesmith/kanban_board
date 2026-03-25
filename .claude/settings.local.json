@@ -27,7 +27,16 @@
       "Bash(npm install:*)",
       "Bash(find /Users/michaelsmith/Documents/Learning/pm/frontend -name *.test.* -o -name *.spec.*)",
       "Bash(find /Users/michaelsmith/Documents/Learning/pm -path */node_modules -prune -o -name *.test.* -type f -print)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(docker info:*)",
+      "Bash(docker context:*)",
+      "Bash(DOCKER_HOST=unix:///Users/michaelsmith/.docker/run/docker.sock docker compose build)",
+      "Bash(docker version:*)",
+      "Bash(DOCKER_HOST=unix:///Users/michaelsmith/.docker/run/docker.sock docker version)",
+      "Bash(DOCKER_HOST=unix:///var/run/docker.sock docker version)",
+      "Bash(DOCKER_HOST=unix:///var/run/docker.sock docker compose -f /Users/michaelsmith/Documents/Learning/pm/docker-compose.yml build)"
     ]
   }
 }

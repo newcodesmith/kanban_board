@@ -292,7 +292,7 @@ def set_user_active(db_path: Path, username: str, is_active: bool) -> bool:
     with _connect(db_path) as connection:
         result = connection.execute(
             "UPDATE users SET is_active = ? WHERE username = ?",
-            (1 if is_active else 0, username),
+            (int(is_active), username),
         )
         connection.commit()
     return result.rowcount > 0
@@ -363,6 +363,25 @@ def get_board_by_id(
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"Corrupted board data for board id {board_id}") from exc
     return {"id": row["id"], "name": row["name"], "board": board_data}
+
+
+def get_board_meta_by_id(
+    db_path: Path,
+    board_id: int,
+    username: str,
+) -> dict[str, Any] | None:
+    """Get board metadata (id, name, timestamps) by id, ensuring ownership."""
+    with _connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT b.id, b.name, b.created_at, b.updated_at
+            FROM boards b
+            JOIN users u ON u.id = b.user_id
+            WHERE b.id = ? AND u.username = ?
+            """,
+            (board_id, username),
+        ).fetchone()
+    return dict(row) if row is not None else None
 
 
 def save_board_by_id(

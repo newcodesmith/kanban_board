@@ -23,10 +23,12 @@ from app.ai_client import (
 from app.board_store import (
     authenticate_user,
     create_board_for_user,
+    DEFAULT_BOARD,
     delete_board,
     delete_user_by_username,
     get_board_by_id,
     get_board_for_username,
+    get_board_meta_by_id,
     get_user_by_username,
     initialize_database,
     list_boards_for_user,
@@ -130,7 +132,7 @@ class CardModel(BaseModel):
     id: str
     title: str
     details: str
-    priority: str | None = None  # "low" | "medium" | "high"
+    priority: Literal["low", "medium", "high"] | None = None
     due_date: str | None = None  # ISO date string YYYY-MM-DD
     labels: list[str] = Field(default_factory=list)
 
@@ -236,12 +238,7 @@ def _validate_token(token: str) -> tuple[bool, str | None]:
     token_entry = issued_tokens.get(token)
     if token_entry is None:
         return False, None
-
-    expiry, username = token_entry
-    if expiry <= datetime.now(UTC):
-        issued_tokens.pop(token, None)
-        return False, None
-
+    _, username = token_entry
     return True, username
 
 
@@ -501,8 +498,6 @@ async def create_board(
     if result is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Return the newly created board with default data
-    from app.board_store import DEFAULT_BOARD
     return BoardWithMeta(
         id=result["id"],
         name=result["name"],
@@ -543,14 +538,13 @@ async def update_board_by_id(
     if not saved:
         raise HTTPException(status_code=404, detail="Board not found")
 
-    # Re-fetch to get current name
-    result = get_board_by_id(_database_path(), board_id, username)
-    if result is None:
+    meta = get_board_meta_by_id(_database_path(), board_id, username)
+    if meta is None:
         raise HTTPException(status_code=404, detail="Board not found")
 
     return BoardWithMeta(
-        id=result["id"],
-        name=result["name"],
+        id=meta["id"],
+        name=meta["name"],
         board=payload.board,
     )
 
@@ -570,12 +564,11 @@ async def rename_board_endpoint(
     if not renamed:
         raise HTTPException(status_code=404, detail="Board not found")
 
-    boards = list_boards_for_user(_database_path(), username)
-    updated = next((b for b in boards if b["id"] == board_id), None)
-    if updated is None:
+    meta = get_board_meta_by_id(_database_path(), board_id, username)
+    if meta is None:
         raise HTTPException(status_code=404, detail="Board not found")
 
-    return BoardMeta(**updated)
+    return BoardMeta(**meta)
 
 
 @app.delete("/api/boards/{board_id}", status_code=204)
@@ -659,7 +652,6 @@ async def ai_chat(
     if not message:
         raise HTTPException(status_code=422, detail="Message is required")
 
-    # Support board_id for multi-board AI chat
     if payload.board_id is not None:
         board_result = get_board_by_id(_database_path(), payload.board_id, username)
         if board_result is None:

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -40,8 +40,6 @@ export const KanbanBoard = ({ initialBoard, boardName, onBoardChange }: KanbanBo
       activationConstraint: { distance: 6 },
     })
   );
-
-  const cardsById = useMemo(() => board.cards, [board.cards]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
@@ -120,7 +118,7 @@ export const KanbanBoard = ({ initialBoard, boardName, onBoardChange }: KanbanBo
     (c) => c.priority === "high"
   ).length;
 
-  const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
   return (
     <div className="relative overflow-hidden">

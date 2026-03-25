@@ -31,7 +31,7 @@ export type UserInfo = {
   created_at: string;
 };
 
-const getJson = async <T>(response: Response): Promise<T> => {
+const throwOnError = async (response: Response): Promise<void> => {
   if (!response.ok) {
     let detailMessage = "";
     try {
@@ -42,11 +42,14 @@ const getJson = async <T>(response: Response): Promise<T> => {
     } catch {
       detailMessage = "";
     }
-
     throw new Error(
       detailMessage || `Request failed with status ${response.status}`
     );
   }
+};
+
+const getJson = async <T>(response: Response): Promise<T> => {
+  await throwOnError(response);
   return (await response.json()) as T;
 };
 
@@ -190,23 +193,9 @@ export const renameBoardRequest = async (
 export const deleteBoardRequest = async (token: string, boardId: number) => {
   const response = await fetch(`/api/boards/${boardId}`, {
     method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!response.ok) {
-    let detailMessage = "";
-    try {
-      const errorPayload = (await response.json()) as { detail?: string };
-      if (typeof errorPayload.detail === "string") {
-        detailMessage = errorPayload.detail;
-      }
-    } catch {
-      detailMessage = "";
-    }
-    throw new Error(detailMessage || `Request failed with status ${response.status}`);
-  }
+  await throwOnError(response);
 };
 
 // ── User management endpoints ─────────────────────────────────────────────────
@@ -224,23 +213,9 @@ export const listUsersRequest = async (token: string) => {
 export const deleteUserRequest = async (token: string, username: string) => {
   const response = await fetch(`/api/users/${username}`, {
     method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   });
-
-  if (!response.ok) {
-    let detailMessage = "";
-    try {
-      const errorPayload = (await response.json()) as { detail?: string };
-      if (typeof errorPayload.detail === "string") {
-        detailMessage = errorPayload.detail;
-      }
-    } catch {
-      detailMessage = "";
-    }
-    throw new Error(detailMessage || `Request failed with status ${response.status}`);
-  }
+  await throwOnError(response);
 };
 
 export const changePasswordRequest = async (
@@ -256,19 +231,7 @@ export const changePasswordRequest = async (
     },
     body: JSON.stringify({ new_password: newPassword }),
   });
-
-  if (!response.ok) {
-    let detailMessage = "";
-    try {
-      const errorPayload = (await response.json()) as { detail?: string };
-      if (typeof errorPayload.detail === "string") {
-        detailMessage = errorPayload.detail;
-      }
-    } catch {
-      detailMessage = "";
-    }
-    throw new Error(detailMessage || `Request failed with status ${response.status}`);
-  }
+  await throwOnError(response);
 };
 
 // ── AI Chat ───────────────────────────────────────────────────────────────────
